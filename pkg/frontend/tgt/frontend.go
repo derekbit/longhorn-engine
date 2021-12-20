@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/longhorn/go-iscsi-helper/longhorndev"
+	"github.com/longhorn/longhorn-engine/pkg/cache"
 	"github.com/longhorn/longhorn-engine/pkg/frontend/socket"
 	"github.com/longhorn/longhorn-engine/pkg/types"
 )
@@ -21,24 +22,26 @@ type Tgt struct {
 
 	isUp         bool
 	dev          longhorndev.DeviceService
+	cache        *cache.Cache
 	frontendName string
 }
 
 func New(frontendName string) types.Frontend {
 	s := socket.New()
-	return &Tgt{s, false, nil, frontendName}
+	return &Tgt{s, false, nil, nil, frontendName}
 }
 
 func (t *Tgt) FrontendName() string {
 	return t.frontendName
 }
 
-func (t *Tgt) Init(name string, size, sectorSize int64) error {
-	if err := t.s.Init(name, size, sectorSize); err != nil {
+func (t *Tgt) Init(name string, size, sectorSize int64, cacheFile string, cacheSize int64) error {
+	if err := t.s.Init(name, size, sectorSize, cacheFile, cacheSize); err != nil {
 		return err
 	}
 
 	ldc := longhorndev.LonghornDeviceCreator{}
+
 	dev, err := ldc.NewDevice(name, size, t.frontendName)
 	if err != nil {
 		return err
@@ -47,6 +50,8 @@ func (t *Tgt) Init(name string, size, sectorSize int64) error {
 	if err := t.dev.InitDevice(); err != nil {
 		return err
 	}
+
+	t.cache = cache.NewCache(name, cacheFile, cacheSize)
 
 	t.isUp = false
 
@@ -60,6 +65,12 @@ func (t *Tgt) Startup(rw types.ReaderWriterAt) error {
 
 	if err := t.dev.Start(); err != nil {
 		return err
+	}
+
+	if t.cache.IsSet() {
+		if err := t.cache.Start(); err != nil {
+			return err
+		}
 	}
 
 	t.isUp = true
@@ -95,7 +106,7 @@ func (t *Tgt) Endpoint() string {
 	return ""
 }
 
-func (t *Tgt) Upgrade(name string, size, sectorSize int64, rw types.ReaderWriterAt) error {
+func (t *Tgt) Upgrade(name string, size int64, sectorSize int64, cacheFile string, cacheSize int64, rw types.ReaderWriterAt) error {
 	ldc := longhorndev.LonghornDeviceCreator{}
 	dev, err := ldc.NewDevice(name, size, t.frontendName)
 	if err != nil {
@@ -107,7 +118,7 @@ func (t *Tgt) Upgrade(name string, size, sectorSize int64, rw types.ReaderWriter
 		return err
 	}
 
-	if err := t.s.Init(name, size, sectorSize); err != nil {
+	if err := t.s.Init(name, size, sectorSize, cacheFile, cacheSize); err != nil {
 		return err
 	}
 	if err := t.s.Startup(rw); err != nil {

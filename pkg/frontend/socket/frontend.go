@@ -27,6 +27,8 @@ func New() *Socket {
 type Socket struct {
 	Volume     string
 	Size       int64
+	CacheSize  int64
+	CacheFile  string
 	SectorSize int
 
 	isUp         bool
@@ -38,10 +40,12 @@ func (t *Socket) FrontendName() string {
 	return frontendName
 }
 
-func (t *Socket) Init(name string, size, sectorSize int64) error {
+func (t *Socket) Init(name string, size, sectorSize int64, cacheFile string, cacheSize int64) error {
 	t.Volume = name
 	t.Size = size
 	t.SectorSize = int(sectorSize)
+	t.CacheFile = cacheFile
+	t.CacheSize = cacheSize
 
 	return t.Shutdown()
 }
@@ -158,7 +162,7 @@ func (d DataProcessorWrapper) PingResponse() error {
 	return nil
 }
 
-func (t *Socket) Upgrade(name string, size, sectorSize int64, rw types.ReaderWriterAt) error {
+func (t *Socket) Upgrade(name string, size int64, sectorSize int64, cacheFile string, cacheSize int64, rw types.ReaderWriterAt) error {
 	return fmt.Errorf("Upgrade is not supported")
 }
 

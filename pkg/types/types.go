@@ -103,12 +103,12 @@ type ReplicaSalvageInfo struct {
 
 type Frontend interface {
 	FrontendName() string
-	Init(name string, size, sectorSize int64) error
+	Init(name string, size, sectorSize int64, cacheFile string, cacheSize int64) error
 	Startup(rw ReaderWriterAt) error
 	Shutdown() error
 	State() State
 	Endpoint() string
-	Upgrade(name string, size, sectorSize int64, rw ReaderWriterAt) error
+	Upgrade(name string, size, sectorSize int64, cacheFile string, cacheSize int64, rw ReaderWriterAt) error
 	Expand(size int64) error
 }
 
