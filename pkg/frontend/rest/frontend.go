@@ -23,6 +23,8 @@ type Device struct {
 	Name       string
 	Size       int64
 	SectorSize int64
+	CacheSize  int64
+	CacheFile  string
 
 	isUp    bool
 	backend types.ReaderWriterAt
@@ -36,10 +38,12 @@ func (d *Device) FrontendName() string {
 	return frontendName
 }
 
-func (d *Device) Init(name string, size, sectorSize int64) error {
+func (d *Device) Init(name string, size, sectorSize int64, cacheFile string, cacheSize int64) error {
 	d.Name = name
 	d.Size = size
 	d.SectorSize = sectorSize
+	d.CacheSize = cacheSize
+	d.CacheFile = cacheFile
 	return nil
 }
 
@@ -91,7 +95,7 @@ func (d *Device) Endpoint() string {
 	return ""
 }
 
-func (d *Device) Upgrade(name string, size, sectorSize int64, rw types.ReaderWriterAt) error {
+func (d *Device) Upgrade(name string, size, sectorSize int64, cacheFile string, cacheSize int64, rw types.ReaderWriterAt) error {
 	return fmt.Errorf("Upgrade is not supported")
 }
 

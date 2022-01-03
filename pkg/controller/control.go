@@ -32,6 +32,9 @@ type Controller struct {
 	revisionCounterDisabled bool
 	salvageRequested        bool
 
+	cacheFile string
+	cacheSize int64
+
 	GRPCAddress string
 	GRPCServer  *grpc.Server
 
@@ -51,7 +54,7 @@ const (
 	lastModifyCheckPeriod = 5 * time.Second
 )
 
-func NewController(name string, factory types.BackendFactory, frontend types.Frontend, isUpgrade bool, disableRevCounter bool, salvageRequested bool) *Controller {
+func NewController(name string, factory types.BackendFactory, frontend types.Frontend, isUpgrade bool, disableRevCounter bool, salvageRequested bool, cacheFile string, cacheSize int64) *Controller {
 	c := &Controller{
 		factory:       factory,
 		Name:          name,
@@ -62,6 +65,8 @@ func NewController(name string, factory types.BackendFactory, frontend types.Fro
 		isUpgrade:               isUpgrade,
 		revisionCounterDisabled: disableRevCounter,
 		salvageRequested:        salvageRequested,
+		cacheFile:               cacheFile,
+		cacheSize:               cacheSize,
 	}
 	c.reset()
 	c.metricsStart()
@@ -418,13 +423,14 @@ func (c *Controller) startFrontend() error {
 	if len(c.replicas) > 0 && c.frontend != nil {
 		if c.isUpgrade {
 			logrus.Infof("Upgrading frontend")
-			if err := c.frontend.Upgrade(c.Name, c.size, c.sectorSize, c); err != nil {
+			if err := c.frontend.Upgrade(c.Name, c.size, c.sectorSize, c.cacheFile, c.cacheSize, c); err != nil {
 				logrus.Errorf("Failed to upgrade frontend: %v", err)
 				return errors.Wrap(err, "failed to upgrade frontend")
 			}
 			return nil
 		}
-		if err := c.frontend.Init(c.Name, c.size, c.sectorSize); err != nil {
+
+		if err := c.frontend.Init(c.Name, c.size, c.sectorSize, c.cacheFile, c.cacheSize); err != nil {
 			logrus.Errorf("Failed to init frontend: %v", err)
 			return errors.Wrap(err, "failed to init frontend")
 		}

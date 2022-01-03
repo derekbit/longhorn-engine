@@ -50,6 +50,16 @@ func ControllerCmd() cli.Command {
 				Hidden: false,
 				Usage:  "Start engine controller in a special mode only to get best replica candidate for salvage",
 			},
+			cli.StringFlag{
+				Name:   "cacheFile",
+				Hidden: false,
+				Usage:  "Path to the cache file",
+			},
+			cli.Int64Flag{
+				Name:   "cacheSize",
+				Hidden: false,
+				Usage:  "Cache size of the block device which must be equal to or smaller than the block device",
+			},
 		},
 		Action: func(c *cli.Context) {
 			if err := startController(c); err != nil {
@@ -76,6 +86,8 @@ func startController(c *cli.Context) error {
 	isUpgrade := c.Bool("upgrade")
 	disableRevCounter := c.Bool("disableRevCounter")
 	salvageRequested := c.Bool("salvageRequested")
+	cacheFile := c.String("cacheFile")
+	cacheSize := c.Int64("cacheSize")
 
 	factories := map[string]types.BackendFactory{}
 	for _, backend := range backends {
@@ -98,7 +110,7 @@ func startController(c *cli.Context) error {
 		frontend = f
 	}
 
-	control := controller.NewController(name, dynamic.New(factories), frontend, isUpgrade, disableRevCounter, salvageRequested)
+	control := controller.NewController(name, dynamic.New(factories), frontend, isUpgrade, disableRevCounter, salvageRequested, cacheFile, cacheSize)
 
 	// need to wait for Shutdown() completion
 	control.ShutdownWG.Add(1)
