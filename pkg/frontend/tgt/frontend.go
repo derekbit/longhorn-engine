@@ -79,6 +79,12 @@ func (t *Tgt) Startup(rw types.ReaderWriterAt) error {
 }
 
 func (t *Tgt) Shutdown() error {
+	if t.cache.IsSet() {
+		if err := t.cache.Shutdown(); err != nil {
+			return err
+		}
+	}
+
 	if t.dev != nil {
 		if err := t.dev.Shutdown(); err != nil {
 			return err
