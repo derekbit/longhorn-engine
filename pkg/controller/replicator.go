@@ -120,12 +120,21 @@ func (r *replicator) ReadAt(buf []byte, off int64) (int, error) {
 	return n, nil
 }
 
+//var totalTime int64
+//var totalCount int64
+
 func (r *replicator) WriteAt(p []byte, off int64) (int, error) {
 	if !r.backendsAvailable {
 		return 0, ErrNoBackend
 	}
 
+	//start := time.Now()
 	n, err := r.writer.WriteAt(p, off)
+	//elapsed := time.Since(start)
+	//totalTime = totalTime + int64(elapsed)
+	//totalCount = totalCount + 1
+	//avg := totalTime / totalCount
+	//logrus.Infof("Debug ---> replicator elapsed=%v  size=%v avg=%v", elapsed.Nanoseconds(), len(p), avg)
 	if err != nil {
 		errors := map[string]error{
 			r.writerIndex[0]: err,

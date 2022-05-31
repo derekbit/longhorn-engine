@@ -1126,10 +1126,14 @@ func (r *Replica) WriteAt(buf []byte, offset int64) (int, error) {
 		return 0, fmt.Errorf("Can not write on read-only replica")
 	}
 
+	//start := time.Now()
 	r.RLock()
 	r.info.Dirty = true
 	c, err := r.volume.WriteAt(buf, offset)
 	r.RUnlock()
+	//elapsed := time.Since(start)
+	//logrus.Infof("Debug ---> WriteAt elapsed=%v  size=%v", elapsed.Nanoseconds(), len(buf))
+
 	if err != nil {
 		return c, err
 	}

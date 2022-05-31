@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	journal "github.com/longhorn/sparse-tools/stats"
 )
 
 var (
@@ -144,7 +142,7 @@ func (c *Client) loop() {
 
 			logrus.Errorf("R/W Timeout. No response received in %v", OPTimeout)
 			handleClientError(ErrRWTimeout)
-			journal.PrintLimited(1000)
+			//journal.PrintLimited(1000)
 		case req := <-c.requests:
 			if clientError != nil {
 				c.replyError(req, clientError)
@@ -196,7 +194,7 @@ func (c *Client) nextSeq() uint32 {
 }
 
 func (c *Client) replyError(req *Message, err error) {
-	journal.RemovePendingOp(req.ID, false)
+	//journal.RemovePendingOp(req.ID, false)
 	delete(c.messages, req.Seq)
 	req.Type = TypeError
 	req.Data = []byte(err.Error())
@@ -204,15 +202,16 @@ func (c *Client) replyError(req *Message, err error) {
 }
 
 func (c *Client) handleRequest(req *Message) {
-	switch req.Type {
-	case TypeRead:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpRead, int(req.Size))
-	case TypeWrite:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpWrite, int(req.Size))
-	case TypePing:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpPing, 0)
-	}
-
+	/*
+		switch req.Type {
+		case TypeRead:
+			req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpRead, int(req.Size))
+		case TypeWrite:
+			req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpWrite, int(req.Size))
+		case TypePing:
+			req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpPing, 0)
+		}
+	*/
 	req.MagicVersion = MagicVersion
 	req.Seq = c.nextSeq()
 	c.messages[req.Seq] = req
@@ -221,7 +220,7 @@ func (c *Client) handleRequest(req *Message) {
 
 func (c *Client) handleResponse(resp *Message) {
 	if req, ok := c.messages[resp.Seq]; ok {
-		journal.RemovePendingOp(req.ID, true)
+		//journal.RemovePendingOp(req.ID, true)
 		delete(c.messages, resp.Seq)
 		req.Type = resp.Type
 		req.Size = resp.Size

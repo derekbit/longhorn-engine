@@ -33,6 +33,9 @@ func (m *MultiWriterError) Error() string {
 	}
 }
 
+//var totalTime int64
+//var totalCount int64
+
 func (m *MultiWriterAt) WriteAt(p []byte, off int64) (int, error) {
 	errs := make([]error, len(m.writers))
 	wg := sync.WaitGroup{}
@@ -40,7 +43,14 @@ func (m *MultiWriterAt) WriteAt(p []byte, off int64) (int, error) {
 	for i, w := range m.writers {
 		wg.Add(1)
 		go func(index int, w io.WriterAt) {
+			//start := time.Now()
 			_, err := w.WriteAt(p, off)
+			//elapsed := time.Since(start)
+			//logrus.Infof("Debug ---> MultiWriterAt elapsed=%v  size=%v", elapsed.Nanoseconds(), len(p))
+			//totalTime = totalTime + int64(elapsed)
+			//totalCount = totalCount + 1
+			//avg := totalTime / totalCount
+			//ogrus.Infof("Debug ---> MultiWriterAt elapsed=%v  size=%v avg=%v", elapsed.Nanoseconds(), len(p), avg)
 			if err != nil {
 				errs[index] = err
 			}

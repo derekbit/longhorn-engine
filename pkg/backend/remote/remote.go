@@ -3,6 +3,7 @@ package remote
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -264,7 +265,17 @@ func (rf *Factory) Create(address string) (types.Backend, error) {
 		return nil, fmt.Errorf("replica must be closed, Can not add in state: %s", replica.State)
 	}
 
-	conn, err := net.Dial("tcp", dataAddress)
+	logrus.Infof("Debug ==========> client dataAddress=%v", dataAddress)
+	//conn, err := net.Dial("tcp", dataAddress)
+	sockPath := filepath.Join("/uds", "example.sock")
+
+	uaddr, err := net.ResolveUnixAddr("unix", sockPath)
+	if err != nil {
+		return nil, err
+	}
+
+	//conn, err := net.Dial("tcp", sockPath)
+	conn, err := net.DialUnix("unix", nil, uaddr)
 	if err != nil {
 		return nil, err
 	}

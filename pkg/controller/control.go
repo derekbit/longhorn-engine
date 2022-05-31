@@ -686,7 +686,10 @@ func (c *Controller) WriteAt(b []byte, off int64) (int, error) {
 		return 0, err
 	}
 	startTime := time.Now()
+	//start := time.Now()
 	n, err := c.backend.WriteAt(b, off)
+	//elapsed := time.Since(start)
+	//logrus.Infof("Debug ---> Controller elapsed=%v  size=%v", elapsed.Nanoseconds(), len(b))
 	c.RUnlock()
 	if err != nil {
 		return n, c.handleError(err)
