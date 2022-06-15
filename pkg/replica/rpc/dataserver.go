@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"net"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 
@@ -22,18 +23,19 @@ func NewDataServer(address string, s *replica.Server) *DataServer {
 }
 
 func (s *DataServer) ListenAndServe() error {
-	addr, err := net.ResolveTCPAddr("tcp", s.address)
+	sockPath := filepath.Join("/host/var/lib/longhorn/uds", "example.sock")
+	uaddr, err := net.ResolveUnixAddr("unix", sockPath)
 	if err != nil {
 		return err
 	}
 
-	l, err := net.ListenTCP("tcp", addr)
+	l, err := net.ListenUnix("unix", uaddr)
 	if err != nil {
 		return err
 	}
 
 	for {
-		conn, err := l.AcceptTCP()
+		conn, err := l.AcceptUnix()
 		if err != nil {
 			logrus.Errorf("failed to accept connection %v", err)
 			continue
