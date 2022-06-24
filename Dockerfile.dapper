@@ -25,7 +25,7 @@ RUN zypper -n install cmake wget curl git less file gcc \
     bash-completion librdmacm1 librdmacm-utils libibverbs xsltproc docbook-xsl-stylesheets \
     perl-Config-General libaio-devel glibc-devel-static glibc-devel sg3_utils iptables libltdl7 \
     python3-pip uuid-runtime libdevmapper1_03 iproute2 jq unzip zlib-devel zlib-devel-static \
-    rpm-build rdma-core-devel gcc-c++ docker && \
+    rpm-build rdma-core-devel gcc-c++ docker autoconf libtool libunwind-devel && \
     rm -rf rm -rf /var/cache/zypp/*
 
 # needed for ${!var} substitution
@@ -104,21 +104,42 @@ RUN go get \
   github.com/bufbuild/buf/cmd/protoc-gen-buf-check-breaking@v0.26.0 \
   github.com/bufbuild/buf/cmd/protoc-gen-buf-check-lint@v0.26.0
 
+# Build jemalloc
+RUN if [ ${ARCH} == "amd64" ]; then \
+        cd /usr/src && \
+        git clone https://github.com/jemalloc/jemalloc.git && \
+        cd jemalloc && \
+        git checkout 54eaed1d8b56b1aa528be3bdd1877e59c56fa90c && \
+        ./autogen.sh && \
+        make && \
+        make install; \
+    fi
+
+RUN ldconfig
+
 # Build liblonghorn
 RUN cd /usr/src && \
-    git clone https://github.com/rancher/liblonghorn.git && \
+    git clone https://github.com/derekbit/liblonghorn.git && \
     cd liblonghorn && \
-    git checkout 6544c2432d543137a198e4a779f676369dbd9e82 && \
-    make && \
+    git checkout 5878aa9f64de04953a7cbddfa473023f9623c136 && \
+    if [ ${ARCH} == "amd64" ]; then \
+        make EXTRA_LIBS=/usr/local/lib/libjemalloc.a; \
+    else \
+        make; \
+    fi; \
     make install
 
 # Build TGT
 RUN cd /usr/src && \
-    git clone https://github.com/rancher/tgt.git && \
+    git clone https://github.com/derekbit/tgt.git && \
     cd tgt && \
-    git checkout e042fdd3616ca90619637b5826695a3de9b5dd8e && \
-    make && \
-    make install 
+    git checkout db72266aa0a736ad972234016398b5bf19752676 && \
+    if [ ${ARCH} == "amd64" ]; then \
+        make EXTRA_LIBS=-ljemalloc; \
+    else \
+        make; \
+    fi; \
+    make install
 
 # Build cache for tox
 RUN mkdir integration/
