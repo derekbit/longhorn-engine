@@ -20,7 +20,7 @@ RUN wget https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v
 RUN cd /usr/src && \
     git clone https://github.com/rancher/liblonghorn.git && \
     cd liblonghorn && \
-    git checkout 9eaf16c13dccc7f3bdb111d4e21662ae753bdccf && \
+    git checkout dead8bbaad91ed5e1e55239a39207b6408fc6647 && \
     make && \
     make install && \
     rm -rf /usr/src/liblonghorn
