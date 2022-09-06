@@ -1,6 +1,8 @@
 package util
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -328,4 +330,18 @@ func GetInitiatorNS() string {
 
 func GetFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func MD5(path string) (string, error) {
+	h := md5.New()
+
+	f, err := os.Open(path)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	io.Copy(h, f)
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

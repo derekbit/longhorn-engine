@@ -70,6 +70,7 @@ func ReplicaCmd() cli.Command {
 }
 
 func startReplica(c *cli.Context) error {
+	logrus.Infof("Debug ===> startReplica")
 	if c.NArg() != 1 {
 		return errors.New("directory name is required")
 	}

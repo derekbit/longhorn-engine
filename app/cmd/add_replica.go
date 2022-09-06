@@ -47,6 +47,7 @@ func addReplica(c *cli.Context) error {
 	if c.Bool("restore") {
 		return task.AddRestoreReplica(replica)
 	}
+	logrus.Infof("Debug -----> task.AddReplica")
 	return task.AddReplica(replica)
 }
 

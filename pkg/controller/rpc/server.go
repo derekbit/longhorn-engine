@@ -184,6 +184,7 @@ func (cs *ControllerServer) ReplicaGet(ctx context.Context, req *ptypes.ReplicaA
 }
 
 func (cs *ControllerServer) ControllerReplicaCreate(ctx context.Context, req *ptypes.ControllerReplicaCreateRequest) (*ptypes.ControllerReplica, error) {
+	logrus.Infof("Debug =====> ControllerReplicaCreate")
 	if err := cs.c.AddReplica(req.Address, req.SnapshotRequired, ptypes.GRPCReplicaModeToReplicaMode(req.Mode)); err != nil {
 		return nil, err
 	}

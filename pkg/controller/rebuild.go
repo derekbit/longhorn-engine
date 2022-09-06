@@ -157,6 +157,9 @@ func (c *Controller) PrepareRebuildReplica(address string) ([]types.SyncFileInfo
 		return nil, err
 	}
 
+	logrus.Infof("Debug ======> fromDisks=%+v", fromDisks)
+	logrus.Infof("Debug ======> toDisks=%+v", toDisks)
+
 	syncFileInfoList := []types.SyncFileInfo{}
 	extraDisks := toDisks
 	for diskName, info := range fromDisks {
@@ -187,6 +190,8 @@ func (c *Controller) PrepareRebuildReplica(address string) ([]types.SyncFileInfo
 	if err := syncFile(fromHead+".meta", toHead+".meta", rwReplica, replica); err != nil {
 		return nil, err
 	}
+
+	logrus.Infof("Debug ------> syncFileInfoList=%+v", syncFileInfoList)
 
 	return syncFileInfoList, nil
 }

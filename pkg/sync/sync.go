@@ -395,6 +395,7 @@ func (t *Task) VerifyRebuildReplica(address string) error {
 }
 
 func (t *Task) AddReplica(replica string) error {
+	logrus.Infof("Debug -----> AddReplica")
 	volume, err := t.client.VolumeGet()
 	if err != nil {
 		return err
@@ -441,6 +442,7 @@ func (t *Task) AddReplica(replica string) error {
 		return fmt.Errorf("sync file list shouldn't contain volume head")
 	}
 
+	logrus.Infof("Debug ------> SyncFiles")
 	if err = toClient.SyncFiles(fromAddress, resp); err != nil {
 		return err
 	}

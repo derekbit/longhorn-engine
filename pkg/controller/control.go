@@ -139,6 +139,8 @@ func (c *Controller) canAdd(address string) (bool, error) {
 func (c *Controller) addReplica(address string, snapshotRequired bool, mode types.Mode) error {
 	c.Lock()
 	defer c.Unlock()
+
+	logrus.Infof("Debug =====> addReplica")
 	if ok, err := c.canAdd(address); !ok {
 		return err
 	}

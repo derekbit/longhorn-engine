@@ -9,8 +9,10 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/longhorn/longhorn-engine/pkg/util"
 	"github.com/longhorn/sparse-tools/sparse"
 )
 
@@ -120,6 +122,13 @@ func (server *SyncServer) close(writer http.ResponseWriter, request *http.Reques
 		server.fileIo.Close()
 	}
 	log.Infof("Closing ssync server")
+
+	cksum, err := util.MD5(server.filePath)
+	if err == nil {
+		logrus.Infof("Debug ------> receive file=%v, cksum=%v", server.filePath, cksum)
+	} else {
+		logrus.Infof("Debug ------> receive file=%v, err=%v", server.filePath, err)
+	}
 
 	server.cancelFunc()
 }

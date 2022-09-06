@@ -345,6 +345,13 @@ func (s *SyncAgentServer) FileSend(ctx context.Context, req *ptypes.FileSendRequ
 	}
 	logrus.Infof("Done sending file %v to %v", req.FromFileName, address)
 
+	cksum, err := util.MD5(req.FromFileName)
+	if err == nil {
+		logrus.Infof("Debug ------> send file=%v, cksum=%v", req.FromFileName, cksum)
+	} else {
+		logrus.Infof("Debug ------> send file=%v, err=%v", req.FromFileName, err)
+	}
+
 	return &empty.Empty{}, nil
 }
 
@@ -415,6 +422,7 @@ func (s *SyncAgentServer) launchReceiver(processName, toFileName string, ops spa
 }
 
 func (s *SyncAgentServer) FilesSync(ctx context.Context, req *ptypes.FilesSyncRequest) (res *empty.Empty, err error) {
+	logrus.Infof("Debug ------> FilesSync SyncFileInfoList=%+v", req.SyncFileInfoList)
 	if err := s.PrepareRebuild(req.SyncFileInfoList, req.FromAddress); err != nil {
 		return nil, err
 	}
@@ -456,6 +464,7 @@ func (s *SyncAgentServer) FilesSync(ctx context.Context, req *ptypes.FilesSyncRe
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to launch receiver for file %v", info.ToFileName)
 		}
+		logrus.Infof("Debug ------> starting send file %v to %v", info.FromFileName, req.ToHost)
 		if err := fromClient.SendFile(info.FromFileName, req.ToHost, int32(port)); err != nil {
 			return nil, errors.Wrapf(err, "replica %v failed to send file %v to %v:%v", req.FromAddress, info.ToFileName, req.ToHost, port)
 		}
@@ -1330,10 +1339,39 @@ func (s *SyncAgentServer) processRemoveSnapshot(snapshot string) error {
 		switch op.Action {
 		case replica.OpCoalesce:
 			logrus.Infof("Coalescing %v to %v", op.Target, op.Source)
+			cksum, err := util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> before coalescing target file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> before coalescing target file=%v, err=%v", op.Target, err)
+			}
+
+			cksum, err = util.MD5(op.Source)
+			if err == nil {
+				logrus.Infof("Debug ------> before coalescing source file=%v, cksum=%v", op.Source, cksum)
+			} else {
+				logrus.Infof("Debug ------> before coalescing source file=%v, err=%v", op.Source, err)
+			}
+
 			if err := sparse.FoldFile(op.Target, op.Source, s.PurgeStatus); err != nil {
 				logrus.Errorf("failed to coalesce %s on %s: %v", op.Target, op.Source, err)
 				return err
 			}
+
+			cksum, err = util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> after coalescing target file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> after coalescing target file=%v, err=%v", op.Target, err)
+			}
+
+			cksum, err = util.MD5(op.Source)
+			if err == nil {
+				logrus.Infof("Debug ------> after coalescing source file=%v, cksum=%v", op.Source, cksum)
+			} else {
+				logrus.Infof("Debug ------> after coalescing source file=%v, err=%v", op.Source, err)
+			}
+
 		case replica.OpRemove:
 			logrus.Infof("Removing %v", op.Source)
 			if err := s.rmDisk(op.Source); err != nil {
@@ -1341,15 +1379,83 @@ func (s *SyncAgentServer) processRemoveSnapshot(snapshot string) error {
 			}
 		case replica.OpReplace:
 			logrus.Infof("Replace %v with %v", op.Target, op.Source)
+			cksum, err := util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> before replace target file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> before replace target file=%v, err=%v", op.Target, err)
+			}
+
+			cksum, err = util.MD5(op.Source)
+			if err == nil {
+				logrus.Infof("Debug ------> before replace source file=%v, cksum=%v", op.Source, cksum)
+			} else {
+				logrus.Infof("Debug ------> before replace source file=%v, err=%v", op.Source, err)
+			}
+
 			if err = s.replaceDisk(op.Source, op.Target); err != nil {
 				logrus.Errorf("Failed to replace %v with %v", op.Target, op.Source)
 				return err
 			}
+
+			cksum, err = util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> after replace target file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> after replace target file=%v, err=%v", op.Target, err)
+			}
+
+			cksum, err = util.MD5(op.Source)
+			if err == nil {
+				logrus.Infof("Debug ------> after replace source file=%v, cksum=%v", op.Source, cksum)
+			} else {
+				logrus.Infof("Debug ------> after replace source file=%v, err=%v", op.Source, err)
+			}
 		case replica.OpPrune:
+			cksum, err := util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> before prune target file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> before prune target file=%v, err=%v", op.Target, err)
+			}
+			cksum, err = util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> before prune target2 file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> before prune target2 file=%v, err=%v", op.Target, err)
+			}
+
+			cksum, err = util.MD5(op.Source)
+			if err == nil {
+				logrus.Infof("Debug ------> before prune source file=%v, cksum=%v", op.Source, cksum)
+			} else {
+				logrus.Infof("Debug ------> before prune source file=%v, err=%v", op.Source, err)
+			}
+
 			logrus.Infof("Prune overlapping chunks from %v based on %v", op.Source, op.Target)
 			if err := sparse.PruneFile(op.Source, op.Target, s.PurgeStatus); err != nil {
 				logrus.Errorf("failed to prune %s based on %s: %v", op.Source, op.Target, err)
 				return err
+			}
+
+			cksum, err = util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> after prune target file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> after prune target file=%v, err=%v", op.Target, err)
+			}
+			cksum, err = util.MD5(op.Target)
+			if err == nil {
+				logrus.Infof("Debug ------> after prune target2 file=%v, cksum=%v", op.Target, cksum)
+			} else {
+				logrus.Infof("Debug ------> after prune target2 file=%v, err=%v", op.Target, err)
+			}
+
+			cksum, err = util.MD5(op.Source)
+			if err == nil {
+				logrus.Infof("Debug ------> after prune source file=%v, cksum=%v", op.Source, cksum)
+			} else {
+				logrus.Infof("Debug ------> after prune source file=%v, err=%v", op.Source, err)
 			}
 		}
 	}
