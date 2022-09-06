@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/docker/go-units"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 
@@ -20,6 +21,10 @@ func AddReplicaCmd() cli.Command {
 			cli.BoolFlag{
 				Name:  "restore",
 				Usage: "Set this flag if the replica is being added to a restore/DR volume",
+			},
+			cli.StringFlag{
+				Name:  "size",
+				Usage: "Volume size in bytes or human readable 42kb, 42mb, 42gb",
 			},
 		},
 		Action: func(c *cli.Context) {
@@ -44,10 +49,19 @@ func addReplica(c *cli.Context) error {
 		return err
 	}
 
-	if c.Bool("restore") {
-		return task.AddRestoreReplica(replica)
+	size := c.String("size")
+	if size == "" {
+		return errors.New("size is required")
 	}
-	return task.AddReplica(replica)
+	volumeSize, err := units.RAMInBytes(size)
+	if err != nil {
+		return err
+	}
+
+	if c.Bool("restore") {
+		return task.AddRestoreReplica(volumeSize, replica)
+	}
+	return task.AddReplica(volumeSize, replica)
 }
 
 func StartWithReplicasCmd() cli.Command {

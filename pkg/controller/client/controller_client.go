@@ -124,13 +124,14 @@ func (c *ControllerClient) VolumeGet() (*types.VolumeInfo, error) {
 	return GetVolumeInfo(volume), nil
 }
 
-func (c *ControllerClient) VolumeStart(replicas ...string) error {
+func (c *ControllerClient) VolumeStart(size int64, replicas ...string) error {
 	controllerServiceClient := c.getControllerServiceClient()
 	ctx, cancel := context.WithTimeout(context.Background(), GRPCServiceTimeout)
 	defer cancel()
 
 	if _, err := controllerServiceClient.VolumeStart(ctx, &ptypes.VolumeStartRequest{
 		ReplicaAddresses: replicas,
+		Size:             size,
 	}); err != nil {
 		return fmt.Errorf("failed to start volume %v: %v", c.serviceURL, err)
 	}
