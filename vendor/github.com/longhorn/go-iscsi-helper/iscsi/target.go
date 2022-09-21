@@ -89,6 +89,7 @@ func AddLun(tid int, lun int, backingFile string, bstype string, bsopts string) 
 		"--lun", strconv.Itoa(lun),
 		"-b", backingFile,
 		"--bstype", bstype,
+		"--blocksize", strconv.Itoa(4096),
 	}
 	if bsopts != "" {
 		opts = append(opts, "--bsopts", bsopts)
