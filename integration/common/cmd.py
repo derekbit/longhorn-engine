@@ -5,7 +5,7 @@ from os import path
 
 from common.constants import (
     RETRY_COUNTS, RETRY_INTERVAL,
-    SIZE
+    SIZE, BLOCKSIZE_STR
 )
 
 def _file(f):
@@ -157,8 +157,6 @@ def backup_volume_list(url, name, dest, include_backup_details=False):
 def add_replica(url, replica_url, size=SIZE, restore=False):
     cmd = [_bin(), '--url', url, '--debug',
            'add',
-           '--size', str(size),
-           '--current-size', str(size),
            replica_url]
     if restore:
         cmd.append("--restore")

@@ -47,6 +47,7 @@ from common.constants import (
     RETRY_COUNTS_SHORT,
     RETRY_INTERVAL_SHORT,
     MESSAGE_TYPE_ERROR,
+    BLOCKSIZE_STR,
 )
 
 from common.util import (
@@ -113,8 +114,6 @@ def test_replica_add_start(bin, grpc_controller_client,  # NOQA
 
     cmd = [bin, '--debug', '--url', grpc_controller_client.address,
            'add-replica',
-           '--size', SIZE_STR,
-           '--current-size', SIZE_STR,
            grpc_replica_client.url]
     subprocess.check_call(cmd)
     wait_for_rebuild_complete(grpc_controller_client.address)
@@ -153,8 +152,6 @@ def test_replica_add_rebuild(bin, grpc_controller_client,  # NOQA
     grpc_replica_client.replica_close()
     cmd = [bin, '--debug', '--url', grpc_controller_client.address,
            'add-replica',
-           '--size', SIZE_STR,
-           '--current-size', SIZE_STR,
            grpc_replica_client.url]
     subprocess.check_call(cmd)
     wait_for_rebuild_complete(grpc_controller_client.address)
@@ -164,8 +161,6 @@ def test_replica_add_rebuild(bin, grpc_controller_client,  # NOQA
 
     cmd = [bin, '--debug', '--url', grpc_controller_client.address,
            'add-replica',
-           '--size', SIZE_STR,
-           '--current-size', SIZE_STR,
            grpc_replica_client2.url]
     subprocess.check_call(cmd)
     wait_for_rebuild_complete(grpc_controller_client.address)
@@ -243,8 +238,6 @@ def test_replica_add_after_rebuild_failed(bin, grpc_controller_client,  # NOQA
 
     cmd = [bin, '--debug', '--url', grpc_controller_client.address,
            'add-replica',
-           '--size', SIZE_STR,
-           '--current-size', SIZE_STR,
            grpc_replica_client.url]
     subprocess.check_call(cmd)
 
@@ -257,8 +250,6 @@ def test_replica_add_after_rebuild_failed(bin, grpc_controller_client,  # NOQA
 
     cmd = [bin, '--debug', '--url', grpc_controller_client.address,
            'add-replica',
-           '--size', SIZE_STR,
-           '--current-size', SIZE_STR,
            grpc_replica_client2.url]
     subprocess.check_call(cmd)
 
@@ -586,8 +577,6 @@ def test_snapshot_last(bin, grpc_controller_client,  # NOQA
 
     cmd = [bin, '--url', grpc_controller_client.address,
            'add',
-           '--size', SIZE_STR,
-           '--current-size', SIZE_STR,
            r2_url]
     subprocess.check_output(cmd)
     cmd = [bin, '--url', grpc_controller_client.address,
