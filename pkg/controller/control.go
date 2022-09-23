@@ -458,6 +458,7 @@ func (c *Controller) StartFrontend(frontend string) error {
 	if !ok {
 		return fmt.Errorf("failed to find frontend: %s", frontend)
 	}
+
 	c.frontend = f
 	return c.startFrontend()
 }
@@ -613,7 +614,7 @@ func determineCorrectVolumeSize(volumeSize, volumeCurrentSize int64, backendSize
 	return volumeCurrentSize
 }
 
-func (c *Controller) Start(volumeSize, volumeCurrentSize int64, addresses ...string) error {
+func (c *Controller) Start(volumeSize, volumeCurrentSize, sectorSize int64, addresses ...string) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -665,10 +666,10 @@ func (c *Controller) Start(volumeSize, volumeCurrentSize int64, addresses ...str
 
 		if first {
 			first = false
-			c.sectorSize = newSectorSize
+			c.sectorSize = sectorSize
 		}
 
-		if c.sectorSize != newSectorSize {
+		if c.sectorSize != sectorSize {
 			logrus.Warnf("backend %v sector size does not match %d != %d in the engine initiation phase", address, c.sectorSize, newSectorSize)
 			continue
 		}
@@ -884,6 +885,10 @@ func (c *Controller) Shutdown() error {
 
 func (c *Controller) Size() int64 {
 	return c.size
+}
+
+func (c *Controller) SectorSize() int64 {
+	return c.sectorSize
 }
 
 func (c *Controller) monitoring(address string, backend types.Backend) {

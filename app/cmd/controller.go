@@ -28,6 +28,10 @@ func ControllerCmd() cli.Command {
 				Value: "localhost:9501",
 			},
 			cli.StringFlag{
+				Name:  "blocksize",
+				Usage: "Volume block size in bytes or human readable 42kb, 42mb, 42gb",
+			},
+			cli.StringFlag{
 				Name:  "size",
 				Usage: "Volume nominal size in bytes or human readable 42kb, 42mb, 42gb",
 			},
@@ -104,6 +108,15 @@ func startController(c *cli.Context) error {
 		return err
 	}
 
+	size = c.String("blocksize")
+	if size == "" {
+		return errors.New("blocksize is required")
+	}
+	blockSize, err := units.RAMInBytes(size)
+	if err != nil {
+		return err
+	}
+
 	factories := map[string]types.BackendFactory{}
 	for _, backend := range backends {
 		switch backend {
@@ -137,7 +150,7 @@ func startController(c *cli.Context) error {
 
 	if len(replicas) > 0 {
 		logrus.Infof("Starting with replicas %q", replicas)
-		if err := control.Start(volumeSize, volumeCurrentSize, replicas...); err != nil {
+		if err := control.Start(volumeSize, volumeCurrentSize, blockSize, replicas...); err != nil {
 			log.Fatal(err)
 		}
 	}

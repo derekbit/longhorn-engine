@@ -22,14 +22,6 @@ func AddReplicaCmd() cli.Command {
 				Name:  "restore",
 				Usage: "Set this flag if the replica is being added to a restore/DR volume",
 			},
-			cli.StringFlag{
-				Name:  "size",
-				Usage: "Volume nominal size in bytes or human readable 42kb, 42mb, 42gb",
-			},
-			cli.StringFlag{
-				Name:  "current-size",
-				Usage: "Volume current size in bytes or human readable 42kb, 42mb, 42gb",
-			},
 		},
 		Action: func(c *cli.Context) {
 			if err := addReplica(c); err != nil {
@@ -53,28 +45,10 @@ func addReplica(c *cli.Context) error {
 		return err
 	}
 
-	size := c.String("size")
-	if size == "" {
-		return errors.New("size is required")
-	}
-	volumeSize, err := units.RAMInBytes(size)
-	if err != nil {
-		return err
-	}
-
-	size = c.String("current-size")
-	if size == "" {
-		return errors.New("current-size is required")
-	}
-	volumeCurrentSize, err := units.RAMInBytes(size)
-	if err != nil {
-		return err
-	}
-
 	if c.Bool("restore") {
-		return task.AddRestoreReplica(volumeSize, volumeCurrentSize, replica)
+		return task.AddRestoreReplica(replica)
 	}
-	return task.AddReplica(volumeSize, volumeCurrentSize, replica)
+	return task.AddReplica(replica)
 }
 
 func StartWithReplicasCmd() cli.Command {
@@ -131,7 +105,16 @@ func startWithReplicas(c *cli.Context) error {
 		return err
 	}
 
-	return task.StartWithReplicas(volumeSize, volumeCurrentSize, replicas)
+	size = c.String("blocksize")
+	if size == "" {
+		return errors.New("blocksize is required")
+	}
+	blockSize, err := units.RAMInBytes(size)
+	if err != nil {
+		return err
+	}
+
+	return task.StartWithReplicas(volumeSize, volumeCurrentSize, blockSize, replicas)
 }
 
 func RebuildStatusCmd() cli.Command {

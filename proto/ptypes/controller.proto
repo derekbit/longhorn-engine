@@ -41,6 +41,8 @@ message Volume {
 
     string last_expansion_error = 8;
     string last_expansion_failed_at = 9;
+
+    int64 sector_size = 10;
 }
 
 message ReplicaAddress {
