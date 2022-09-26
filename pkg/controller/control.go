@@ -21,6 +21,7 @@ import (
 
 type Controller struct {
 	sync.RWMutex
+	ioLock     sync.RWMutex
 	Name       string
 	size       int64
 	sectorSize int64
@@ -741,6 +742,16 @@ func (c *Controller) Start(volumeSize, volumeCurrentSize int64, addresses ...str
 	return nil
 }
 
+func (c *Controller) needIOSerialization(b []byte, off int64) bool {
+	l := int64(len(b))
+
+	if l%util.DefaultBlockSize == 0 && off%util.DefaultBlockSize == 0 {
+		return false
+	}
+
+	return true
+}
+
 func (c *Controller) WriteAt(b []byte, off int64) (int, error) {
 	c.RLock()
 	l := len(b)
@@ -750,7 +761,19 @@ func (c *Controller) WriteAt(b []byte, off int64) (int, error) {
 		return 0, err
 	}
 	startTime := time.Now()
+
+	ioLocked := false
+	if c.needIOSerialization(b, off) {
+		c.ioLock.Lock()
+		ioLocked = true
+	}
+
 	n, err := c.backend.WriteAt(b, off)
+
+	if ioLocked {
+		c.ioLock.Unlock()
+	}
+
 	c.RUnlock()
 	if err != nil {
 		return n, c.handleError(err)
