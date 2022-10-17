@@ -176,7 +176,7 @@ func (s *SyncAgentServer) nextPort(processName string) (int, error) {
 		return port, nil
 	}
 
-	return 0, errors.New("Out of ports")
+	return 0, errors.New("out of ports")
 }
 
 func (s *SyncAgentServer) IsRestoring() bool {
@@ -361,7 +361,7 @@ func (s *SyncAgentServer) VolumeExport(ctx context.Context, req *ptypes.VolumeEx
 	logrus.Infof("Exporting snapshot %v to %v", req.SnapshotFileName, remoteAddress)
 	dir, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("cannot get working directory: %v", err)
+		return nil, errors.Wrap(err, "cannot get working directory")
 	}
 	r, err := replica.OpenSnapshot(dir, req.SnapshotFileName)
 	if err != nil {
@@ -554,11 +554,11 @@ func (s *SyncAgentServer) SnapshotClone(ctx context.Context, req *ptypes.Snapsho
 		} else {
 			s.CloneStatus.Progress = 100
 			s.CloneStatus.State = types.ProcessStateComplete
-			logrus.Infof("Sync agent gRPC server finished clonning snapshot %v from replica %v to replica %v", req.SnapshotFileName, req.FromAddress, req.ToHost)
+			logrus.Infof("Sync agent gRPC server finished cloning snapshot %v from replica %v to replica %v", req.SnapshotFileName, req.FromAddress, req.ToHost)
 		}
 		s.CloneStatus.Unlock()
 		if err = s.FinishClone(); err != nil {
-			logrus.Errorf("could not finish clonning: %v", err)
+			logrus.Errorf("could not finish cloning: %v", err)
 		}
 	}()
 
@@ -641,7 +641,7 @@ func (s *SyncAgentServer) FinishClone() error {
 	defer s.Unlock()
 
 	if !s.isCloning {
-		return fmt.Errorf("BUG: replica is not clonning")
+		return fmt.Errorf("BUG: replica is not cloning")
 	}
 
 	s.isCloning = false
@@ -680,10 +680,10 @@ func (s *SyncAgentServer) BackupCreate(ctx context.Context, req *ptypes.BackupCr
 		credential := req.Credential
 		if credential != nil {
 			if credential[types.AWSAccessKey] == "" && credential[types.AWSSecretKey] != "" {
-				return nil, errors.New("Could not backup to s3 without setting credential access key")
+				return nil, errors.New("could not backup to s3 without setting credential access key")
 			}
 			if credential[types.AWSAccessKey] != "" && credential[types.AWSSecretKey] == "" {
-				return nil, errors.New("Could not backup to s3 without setting credential secret access key")
+				return nil, errors.New("could not backup to s3 without setting credential secret access key")
 			}
 			if credential[types.AWSAccessKey] != "" && credential[types.AWSSecretKey] != "" {
 				os.Setenv(types.AWSAccessKey, credential[types.AWSAccessKey])
@@ -714,8 +714,8 @@ func (s *SyncAgentServer) BackupCreate(ctx context.Context, req *ptypes.BackupCr
 		IsIncremental: replicaObj.IsIncremental,
 	}
 
-	if err := s.BackupList.BackupAdd(backupID, replicaObj); err != nil {
-		return nil, fmt.Errorf("failed to add the backup object: %v", err)
+	if err := s.BackupList.Add(backupID, replicaObj); err != nil {
+		return nil, errors.Wrap(err, "failed to add the backup object")
 	}
 
 	logrus.Infof("Done initiating backup creation, received backupID: %v", resp.Backup)
@@ -727,14 +727,14 @@ func (s *SyncAgentServer) BackupStatus(ctx context.Context, req *ptypes.BackupSt
 		return nil, fmt.Errorf("bad request: empty backup name")
 	}
 
-	replicaObj, err := s.BackupList.BackupGet(req.Backup)
+	replicaObj, err := s.BackupList.Get(req.Backup)
 	if err != nil {
 		return nil, err
 	}
 
 	snapshotName, err := replica.GetSnapshotNameFromDiskName(replicaObj.SnapshotID)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't get snapshot name: %v", err)
+		return nil, errors.Wrap(err, "couldn't get snapshot name")
 	}
 
 	resp := &ptypes.BackupStatusResponse{
@@ -805,17 +805,17 @@ func (s *SyncAgentServer) BackupRestore(ctx context.Context, req *ptypes.BackupR
 	}
 	backupType, err := util.CheckBackupType(req.Backup)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check the type for backup %v: %v", req.Backup, err)
+		return nil, errors.Wrapf(err, "failed to check the type for backup %v", req.Backup)
 	}
 	// Check/Set AWS credential
 	if backupType == "s3" {
 		credential := req.Credential
 		if credential != nil {
 			if credential[types.AWSAccessKey] == "" && credential[types.AWSSecretKey] != "" {
-				return nil, errors.New("Could not backup to s3 without setting credential access key")
+				return nil, errors.New("could not backup to s3 without setting credential access key")
 			}
 			if credential[types.AWSAccessKey] != "" && credential[types.AWSSecretKey] == "" {
-				return nil, errors.New("Could not backup to s3 without setting credential secret access key")
+				return nil, errors.New("could not backup to s3 without setting credential secret access key")
 			}
 			if credential[types.AWSAccessKey] != "" && credential[types.AWSSecretKey] != "" {
 				os.Setenv(types.AWSAccessKey, credential[types.AWSAccessKey])
@@ -976,7 +976,7 @@ func (s *SyncAgentServer) postIncrementalRestoreOperations(restoreStatus *replic
 func (s *SyncAgentServer) reloadReplica() error {
 	conn, err := grpc.Dial(s.replicaAddress, grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("cannot connect to ReplicaService %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "cannot connect to ReplicaService %v", s.replicaAddress)
 	}
 	defer conn.Close()
 	replicaServiceClient := ptypes.NewReplicaServiceClient(conn)
@@ -985,7 +985,7 @@ func (s *SyncAgentServer) reloadReplica() error {
 	defer cancel()
 
 	if _, err := replicaServiceClient.ReplicaReload(ctx, &empty.Empty{}); err != nil {
-		return fmt.Errorf("failed to reload replica %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "failed to reload replica %v", s.replicaAddress)
 	}
 
 	return nil
@@ -994,7 +994,7 @@ func (s *SyncAgentServer) reloadReplica() error {
 func (s *SyncAgentServer) replicaRevert(name, created string) error {
 	conn, err := grpc.Dial(s.replicaAddress, grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("cannot connect to ReplicaService %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "cannot connect to ReplicaService %v", s.replicaAddress)
 	}
 	defer conn.Close()
 	replicaServiceClient := ptypes.NewReplicaServiceClient(conn)
@@ -1006,7 +1006,7 @@ func (s *SyncAgentServer) replicaRevert(name, created string) error {
 		Name:    name,
 		Created: created,
 	}); err != nil {
-		return fmt.Errorf("failed to revert replica %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "failed to revert replica %v", s.replicaAddress)
 	}
 
 	return nil
@@ -1291,7 +1291,7 @@ func getSnapshotsInfo(replicaClient *replicaclient.ReplicaClient) (map[string]ty
 func (s *SyncAgentServer) markSnapshotAsRemoved(snapshot string) error {
 	conn, err := grpc.Dial(s.replicaAddress, grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("cannot connect to ReplicaService %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "cannot connect to ReplicaService %v", s.replicaAddress)
 	}
 	defer conn.Close()
 
@@ -1311,7 +1311,7 @@ func (s *SyncAgentServer) markSnapshotAsRemoved(snapshot string) error {
 func (s *SyncAgentServer) processRemoveSnapshot(snapshot string) error {
 	conn, err := grpc.Dial(s.replicaAddress, grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("cannot connect to ReplicaService %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "cannot connect to ReplicaService %v", s.replicaAddress)
 	}
 	defer conn.Close()
 
@@ -1360,7 +1360,7 @@ func (s *SyncAgentServer) processRemoveSnapshot(snapshot string) error {
 func (s *SyncAgentServer) replaceDisk(source, target string) error {
 	conn, err := grpc.Dial(s.replicaAddress, grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("cannot connect to ReplicaService %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "cannot connect to ReplicaService %v", s.replicaAddress)
 	}
 	defer conn.Close()
 
@@ -1381,7 +1381,7 @@ func (s *SyncAgentServer) replaceDisk(source, target string) error {
 func (s *SyncAgentServer) rmDisk(disk string) error {
 	conn, err := grpc.Dial(s.replicaAddress, grpc.WithInsecure())
 	if err != nil {
-		return fmt.Errorf("cannot connect to ReplicaService %v: %v", s.replicaAddress, err)
+		return errors.Wrapf(err, "cannot connect to ReplicaService %v", s.replicaAddress)
 	}
 	defer conn.Close()
 
@@ -1402,8 +1402,8 @@ func (s *SyncAgentServer) rmDisk(disk string) error {
 // The APIs BackupAdd, BackupGet, Refresh, BackupDelete implement the CRUD interface for the backup object
 // The slice Backup.backupList is implemented similar to a FIFO queue.
 
-// BackupAdd creates a new backupList object and appends to the end of the list maintained by backup object
-func (b *BackupList) BackupAdd(backupID string, backup *replica.BackupStatus) error {
+// Add creates a new backupList object and appends to the end of the list maintained by backup object
+func (b *BackupList) Add(backupID string, backup *replica.BackupStatus) error {
 	if backupID == "" {
 		return fmt.Errorf("empty backupID")
 	}
@@ -1422,8 +1422,8 @@ func (b *BackupList) BackupAdd(backupID string, backup *replica.BackupStatus) er
 	return nil
 }
 
-// BackupGet takes backupID input and will return the backup object corresponding to that backupID or error if not found
-func (b *BackupList) BackupGet(backupID string) (*replica.BackupStatus, error) {
+// Get takes backupID input and will return the backup object corresponding to that backupID or error if not found
+func (b *BackupList) Get(backupID string) (*replica.BackupStatus, error) {
 	if backupID == "" {
 		return nil, fmt.Errorf("empty backupID")
 	}
@@ -1488,8 +1488,8 @@ func (b *BackupList) Refresh() error {
 	return nil
 }
 
-// BackupDelete will delete the entry in the slice with the corresponding backupID
-func (b *BackupList) BackupDelete(backupID string) error {
+// Delete will delete the entry in the slice with the corresponding backupID
+func (b *BackupList) Delete(backupID string) error {
 	b.Lock()
 	defer b.Unlock()
 
