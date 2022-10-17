@@ -21,6 +21,7 @@ import (
 
 	"github.com/longhorn/backupstore"
 	"github.com/longhorn/longhorn-engine/pkg/backup"
+	"github.com/longhorn/longhorn-engine/pkg/hash"
 	"github.com/longhorn/longhorn-engine/pkg/replica"
 	replicaclient "github.com/longhorn/longhorn-engine/pkg/replica/client"
 	"github.com/longhorn/longhorn-engine/pkg/types"
@@ -40,6 +41,8 @@ const (
 	MaxBackupSize = 5
 
 	PeriodicRefreshIntervalInSeconds = 2
+
+	MaxSnapshotHashTaskSize = 10
 
 	GRPCServiceCommonTimeout = 3 * time.Minute
 
@@ -61,11 +64,12 @@ type SyncAgentServer struct {
 	isCloning       bool
 	replicaAddress  string
 
-	BackupList    *BackupList
-	RestoreInfo   *replica.RestoreStatus
-	PurgeStatus   *PurgeStatus
-	RebuildStatus *RebuildStatus
-	CloneStatus   *CloneStatus
+	BackupList       *BackupList
+	SnapshotHashList *SnapshotHashList
+	RestoreInfo      *replica.RestoreStatus
+	PurgeStatus      *PurgeStatus
+	RebuildStatus    *RebuildStatus
+	CloneStatus      *CloneStatus
 }
 
 type BackupList struct {
@@ -76,6 +80,16 @@ type BackupList struct {
 type BackupInfo struct {
 	backupID     string
 	backupStatus *replica.BackupStatus
+}
+
+type SnapshotHashList struct {
+	sync.RWMutex
+	tasks []*SnapshotHashInfo
+}
+
+type SnapshotHashInfo struct {
+	snapshotName string
+	status       *replica.SnapshotHashStatus
 }
 
 type PurgeStatus struct {
@@ -131,6 +145,14 @@ type CloneStatus struct {
 	totalSize     int64
 }
 
+type HashStatus struct {
+	sync.RWMutex
+	State    types.ProcessState
+	Progress int
+	Checksum string
+	Error    string
+}
+
 func (cs *CloneStatus) UpdateSyncFileProgress(size int64) {
 	cs.Lock()
 	defer cs.Unlock()
@@ -147,11 +169,12 @@ func NewSyncAgentServer(startPort, endPort int, replicaAddress string) *SyncAgen
 		processesByPort: map[int]string{},
 		replicaAddress:  replicaAddress,
 
-		BackupList:    &BackupList{},
-		RestoreInfo:   &replica.RestoreStatus{},
-		PurgeStatus:   &PurgeStatus{},
-		RebuildStatus: &RebuildStatus{},
-		CloneStatus:   &CloneStatus{},
+		BackupList:       &BackupList{},
+		SnapshotHashList: &SnapshotHashList{},
+		RestoreInfo:      &replica.RestoreStatus{},
+		PurgeStatus:      &PurgeStatus{},
+		RebuildStatus:    &RebuildStatus{},
+		CloneStatus:      &CloneStatus{},
 	}
 }
 
@@ -302,6 +325,7 @@ func (s *SyncAgentServer) Reset(ctx context.Context, req *empty.Empty) (*empty.E
 	}
 	s.isRestoring = false
 	s.BackupList = &BackupList{}
+	s.SnapshotHashList = &SnapshotHashList{}
 	s.RestoreInfo = &replica.RestoreStatus{}
 	s.RebuildStatus = &RebuildStatus{}
 	s.PurgeStatus = &PurgeStatus{}
@@ -1504,4 +1528,134 @@ func (b *BackupList) Delete(backupID string) error {
 		}
 	}
 	return fmt.Errorf("backup not found %v", backupID)
+}
+
+func (s *SyncAgentServer) SnapshotHash(ctx context.Context, req *ptypes.SnapshotHashRequest) (*empty.Empty, error) {
+	if len(req.SnapshotNames) == 0 {
+		return nil, fmt.Errorf("snapshot name(s) is required")
+	}
+
+	status := hash.DoSnapshotHash(req.SnapshotNames, req.Rehash, req.ConcurrentLimit)
+
+	if err := s.SnapshotHashList.Delete(req.SnapshotNames[0]); err != nil {
+		return nil, errors.Wrapf(err, "failed to delete snapshot %v for from list", req.SnapshotNames[0])
+	}
+
+	if err := s.SnapshotHashList.Add(req.SnapshotNames[0], status); err != nil {
+		return nil, errors.Wrapf(err, "failed to add snapshot %v for hashing", req.SnapshotNames[0])
+	}
+
+	return &empty.Empty{}, nil
+}
+
+func (s *SyncAgentServer) SnapshotHashStatus(ctx context.Context, req *ptypes.SnapshotHashStatusRequest) (*ptypes.SnapshotHashStatusResponse, error) {
+	task, err := s.SnapshotHashList.Get(req.SnapshotName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ptypes.SnapshotHashStatusResponse{
+		State:    string(task.State),
+		Progress: int32(task.Progress),
+		Checksum: task.Checksum,
+		Error:    task.Error,
+	}, nil
+}
+
+func (s *SnapshotHashList) Add(snapshotName string, status *replica.SnapshotHashStatus) error {
+	if snapshotName == "" {
+		return fmt.Errorf("snapshot name is required")
+	}
+
+	if err := s.Refresh(); err != nil {
+		return err
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	s.tasks = append(s.tasks, &SnapshotHashInfo{
+		snapshotName: snapshotName,
+		status:       status,
+	})
+
+	return nil
+}
+
+func (s *SnapshotHashList) Refresh() error {
+	s.Lock()
+	defer s.Unlock()
+
+	var index, completed int
+
+	for index = len(s.tasks) - 1; index >= 0; index-- {
+		if s.tasks[index].status.Progress == 100 {
+			if completed == MaxSnapshotHashTaskSize {
+				break
+			}
+			completed++
+		}
+	}
+	if completed == MaxSnapshotHashTaskSize {
+		// Remove all the older completed tasks in the range snapshotHashList[0:index]
+		for ; index >= 0; index-- {
+			if s.tasks[index].status.Progress == 100 {
+				updatedList, err := s.remove(s.tasks, index)
+				if err != nil {
+					return err
+				}
+				s.tasks = updatedList
+				// As this snapshotHashList[index] is removed, will have to decrement the index by one
+				index--
+			}
+		}
+	}
+	return nil
+}
+
+func (s *SnapshotHashList) remove(l []*SnapshotHashInfo, index int) ([]*SnapshotHashInfo, error) {
+	if l == nil {
+		return nil, fmt.Errorf("empty list")
+	}
+	if index >= len(l) || index < 0 {
+		return nil, fmt.Errorf("BUG: attempting to delete an out of range index entry from snapshotHashList")
+	}
+	return append(l[:index], l[index+1:]...), nil
+}
+
+func (s *SnapshotHashList) Get(snapshotName string) (*replica.SnapshotHashStatus, error) {
+	if snapshotName == "" {
+		return nil, fmt.Errorf("snapshot name is required")
+	}
+
+	if err := s.Refresh(); err != nil {
+		return nil, err
+	}
+
+	s.RLock()
+	defer s.RUnlock()
+
+	for _, info := range s.tasks {
+		if info.snapshotName == snapshotName {
+			return info.status, nil
+		}
+	}
+	return nil, fmt.Errorf("snapshot %v is not found", snapshotName)
+}
+
+// Delete will delete the entry in the slice with the corresponding snapshotName
+func (s *SnapshotHashList) Delete(snapshotName string) error {
+	s.Lock()
+	defer s.Unlock()
+
+	for index, task := range s.tasks {
+		if task.snapshotName == snapshotName {
+			updatedList, err := s.remove(s.tasks, index)
+			if err != nil {
+				return err
+			}
+			s.tasks = updatedList
+			return nil
+		}
+	}
+	return nil
 }

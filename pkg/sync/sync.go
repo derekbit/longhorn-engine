@@ -14,6 +14,7 @@ import (
 	"github.com/longhorn/longhorn-engine/pkg/replica"
 	replicaClient "github.com/longhorn/longhorn-engine/pkg/replica/client"
 	"github.com/longhorn/longhorn-engine/pkg/types"
+	"github.com/longhorn/longhorn-engine/proto/ptypes"
 )
 
 const (
@@ -55,6 +56,13 @@ type SnapshotCloneStatus struct {
 	State              string `json:"state"`
 	FromReplicaAddress string `json:"fromReplicaAddress"`
 	SnapshotName       string `json:"snapshotName"`
+}
+
+type SnapshotHashStatus struct {
+	State    string `json:"state"`
+	Progress int    `json:"progress"`
+	Checksum string `json:"checksum"`
+	Error    string `json:"error"`
 }
 
 func NewTaskError(res ...ReplicaError) *TaskError {
@@ -886,4 +894,134 @@ func CloneStatus(engineControllerClient *client.ControllerClient) (map[string]*S
 		}
 	}
 	return cloneStatusMap, nil
+}
+
+func (t *Task) HashSnapshot(snapshotNames []string, rehash bool, concurrentLimit int) error {
+	replicas, err := t.client.ReplicaList()
+	if err != nil {
+		return err
+	}
+
+	for _, r := range replicas {
+		if r.Mode != types.RW {
+			return fmt.Errorf("cannot hash a snapshot because %v is in %v mode", r.Address, r.Mode)
+		}
+
+		if ok, err := t.isRebuilding(r); err != nil {
+			return err
+		} else if ok {
+			return fmt.Errorf("cannot hash a snapshot because %s is rebuilding", r.Address)
+		}
+	}
+
+	taskErr := NewTaskError()
+	syncErrorMap := sync.Map{}
+	var wg sync.WaitGroup
+	wg.Add(len(replicas))
+
+	for _, r := range replicas {
+		go func(r *types.ControllerReplicaInfo) {
+			defer wg.Done()
+			repClient, err := replicaClient.NewReplicaClient(r.Address)
+			if err != nil {
+				syncErrorMap.Store(r.Address, err)
+				return
+			}
+			defer repClient.Close()
+			if err := repClient.SnapshotHash(snapshotNames, rehash, concurrentLimit); err != nil {
+				syncErrorMap.Store(r.Address, err)
+			}
+		}(r)
+	}
+
+	wg.Wait()
+
+	for _, r := range replicas {
+		if v, ok := syncErrorMap.Load(r.Address); ok {
+			err = v.(error)
+			taskErr.Append(NewReplicaError(r.Address, err))
+		}
+	}
+	if taskErr.HasError() {
+		return taskErr
+	}
+
+	return nil
+}
+
+func (t *Task) HashSnapshotStatus(snapshotName string) (map[string]*SnapshotHashStatus, error) {
+	hashStatusMap := make(map[string]*SnapshotHashStatus)
+	var hashStatusMapLock sync.Mutex
+
+	replicas, err := t.client.ReplicaList()
+	if err != nil {
+		return nil, err
+	}
+
+	// clean up clients after processing
+	var clients []*replicaClient.ReplicaClient
+	defer func() {
+		for _, client := range clients {
+			_ = client.Close()
+		}
+	}()
+
+	wg := sync.WaitGroup{}
+
+	for _, r := range replicas {
+		wg.Add(1)
+
+		go func(r *types.ControllerReplicaInfo) error {
+			var status *ptypes.SnapshotHashStatusResponse
+			var err error
+
+			defer func() {
+				hashStatusMapLock.Lock()
+				defer hashStatusMapLock.Unlock()
+
+				if err == nil {
+					hashStatusMap[r.Address] = &SnapshotHashStatus{
+						State:    status.State,
+						Progress: int(status.Progress),
+						Checksum: status.Checksum,
+						Error:    status.Error,
+					}
+				} else {
+					hashStatusMap[r.Address] = &SnapshotHashStatus{
+						State: string(replica.ProgressStateError),
+						Error: err.Error(),
+					}
+				}
+			}()
+
+			repClient, err := replicaClient.NewReplicaClient(r.Address)
+			if err != nil {
+				return fmt.Errorf("failed to create replica client to %v since %v", r.Address, err)
+			}
+			clients = append(clients, repClient)
+
+			if r.Mode != types.RW {
+				return fmt.Errorf("replica %v since it is in %v mode", r.Address, r.Mode)
+			}
+
+			if ok, err := t.isRebuilding(r); err != nil {
+				return fmt.Errorf("cannot get snapshot hashing status of %v since %v", r.Address, err)
+			} else if ok {
+				return fmt.Errorf("replica %v is rebuilding", r.Address)
+			}
+
+			status, err = repClient.SnapshotHashStatus(snapshotName)
+			if err != nil {
+				return fmt.Errorf("failed to get snapshot hashing status of %v since %v", r.Address, err)
+			} else if status == nil {
+				return fmt.Errorf("BUG: nil snapshot hashing status from %v", r.Address)
+			}
+
+			return nil
+		}(r)
+	}
+
+	wg.Wait()
+
+	return hashStatusMap, nil
 }

@@ -682,3 +682,39 @@ func (c *ReplicaClient) SnapshotCloneStatus() (*ptypes.SnapshotCloneStatusRespon
 	}
 	return status, nil
 }
+
+func (c *ReplicaClient) SnapshotHash(snapshotNames []string, rehash bool, concurrentLimit int) error {
+	syncAgentServiceClient, err := c.getSyncServiceClient()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), GRPCServiceCommonTimeout)
+	defer cancel()
+
+	if _, err := syncAgentServiceClient.SnapshotHash(ctx, &ptypes.SnapshotHashRequest{
+		SnapshotNames:   snapshotNames,
+		Rehash:          rehash,
+		ConcurrentLimit: int32(concurrentLimit),
+	}); err != nil {
+		return errors.Wrap(err, "failed to start hashing snapshot")
+	}
+
+	return nil
+}
+
+func (c *ReplicaClient) SnapshotHashStatus(snapshotName string) (*ptypes.SnapshotHashStatusResponse, error) {
+	syncAgentServiceClient, err := c.getSyncServiceClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), GRPCServiceCommonTimeout)
+	defer cancel()
+
+	status, err := syncAgentServiceClient.SnapshotHashStatus(ctx, &ptypes.SnapshotHashStatusRequest{
+		SnapshotName: snapshotName,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get snapshot hash status")
+	}
+	return status, nil
+}
