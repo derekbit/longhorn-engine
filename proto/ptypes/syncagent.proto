@@ -25,6 +25,9 @@ service SyncAgentService {
   rpc ReplicaRebuildStatus(google.protobuf.Empty) returns
     (ReplicaRebuildStatusResponse) {}
   rpc SnapshotCloneStatus(google.protobuf.Empty) returns (SnapshotCloneStatusResponse) {}
+  rpc SnapshotHash(SnapshotHashRequest) returns (google.protobuf.Empty) {}
+  rpc SnapshotHashStatus(SnapshotHashStatusRequest) returns
+    (SnapshotHashStatusResponse) {}
 }
 
 message FileRemoveRequest {
@@ -149,4 +152,21 @@ message SnapshotCloneStatusResponse {
   string state = 4;
   string from_replica_address = 5;
   string snapshot_name = 6;
+}
+
+message SnapshotHashRequest {
+  repeated string snapshot_names = 1;
+  bool rehash = 2;
+  int32 concurrent_limit = 3;
+}
+
+message SnapshotHashStatusRequest {
+  string snapshot_name = 1;
+}
+
+message SnapshotHashStatusResponse {
+  string state = 1;
+  int32 progress = 2;
+  string checksum = 3;
+  string error = 4;
 }
