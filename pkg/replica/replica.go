@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -139,7 +140,7 @@ func OpenSnapshot(dir string, snapshotName string) (*Replica, error) {
 		}
 	}
 
-	r, err := NewReadOnly(dir, snapshotDiskName, backingFile)
+	r, err := NewReadOnly(dir, snapshotDiskName, nil, backingFile)
 	if err != nil {
 		return nil, err
 	}
@@ -153,15 +154,15 @@ func ReadInfo(dir string) (Info, error) {
 }
 
 func New(size, sectorSize int64, dir string, backingFile *backingfile.BackingFile, disableRevCounter bool) (*Replica, error) {
-	return construct(false, size, sectorSize, dir, "", backingFile, disableRevCounter)
+	return construct(false, size, sectorSize, dir, "", nil, backingFile, disableRevCounter)
 }
 
-func NewReadOnly(dir, head string, backingFile *backingfile.BackingFile) (*Replica, error) {
+func NewReadOnly(dir, head string, snapshotDiskNames []string, backingFile *backingfile.BackingFile) (*Replica, error) {
 	// size and sectorSize don't matter because they will be read from metadata
-	return construct(true, 0, util.ReplicaSectorSize, dir, head, backingFile, false)
+	return construct(true, 0, util.ReplicaSectorSize, dir, head, snapshotDiskNames, backingFile, false)
 }
 
-func construct(readonly bool, size, sectorSize int64, dir, head string, backingFile *backingfile.BackingFile, disableRevCounter bool) (*Replica, error) {
+func construct(readonly bool, size, sectorSize int64, dir, head string, snapshotDiskNames []string, backingFile *backingfile.BackingFile, disableRevCounter bool) (*Replica, error) {
 	if size%sectorSize != 0 {
 		return nil, fmt.Errorf("size %d not a multiple of sector size %d", size, sectorSize)
 	}
@@ -220,7 +221,7 @@ func construct(readonly bool, size, sectorSize int64, dir, head string, backingF
 	}
 
 	if exists {
-		if err := r.openLiveChain(); err != nil {
+		if err := r.openLiveChain(snapshotDiskNames); err != nil {
 			return nil, err
 		}
 	} else if size <= 0 {
@@ -986,7 +987,19 @@ func (r *Replica) updateParentDisk(name, oldParent string) error {
 	return r.encodeToFile(child, child.Name+metadataSuffix)
 }
 
-func (r *Replica) openLiveChain() error {
+func truncateChain(chain, desiredPartialChain []string) []string {
+	if len(chain) < len(desiredPartialChain) {
+		return nil
+	}
+
+	chain = chain[0:len(desiredPartialChain)]
+	if !reflect.DeepEqual(chain, desiredPartialChain) {
+		return nil
+	}
+	return chain
+}
+
+func (r *Replica) openLiveChain(desiredPartialChain []string) error {
 	chain, err := r.Chain()
 	if err != nil {
 		return err
@@ -994,6 +1007,13 @@ func (r *Replica) openLiveChain() error {
 
 	if len(chain) > maximumChainLength {
 		return fmt.Errorf("live chain is too long: %v", len(chain))
+	}
+
+	if desiredPartialChain != nil {
+		chain = truncateChain(chain, desiredPartialChain)
+		if chain == nil {
+			return fmt.Errorf("disk chain is changed: current %v, expected %v", chain, desiredPartialChain)
+		}
 	}
 
 	for i := len(chain) - 1; i >= 0; i-- {

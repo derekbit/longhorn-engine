@@ -1535,7 +1535,7 @@ func (s *SyncAgentServer) SnapshotHash(ctx context.Context, req *ptypes.Snapshot
 		return nil, fmt.Errorf("snapshot name(s) is required")
 	}
 
-	status := hash.DoSnapshotHash(req.SnapshotNames, req.Rehash, req.ConcurrentLimit)
+	status := hash.DoHashSnapshot(req.SnapshotNames, req.Rehash)
 
 	if err := s.SnapshotHashList.Delete(req.SnapshotNames[0]); err != nil {
 		return nil, errors.Wrapf(err, "failed to delete snapshot %v for from list", req.SnapshotNames[0])

@@ -214,7 +214,7 @@ func (rb *BackupStatus) OpenSnapshot(snapID, volumeID string) error {
 	if err != nil {
 		return errors.Wrap(err, "cannot get working directory")
 	}
-	r, err := NewReadOnly(dir, id, rb.backingFile)
+	r, err := NewReadOnly(dir, id, nil, rb.backingFile)
 	if err != nil {
 		return err
 	}
