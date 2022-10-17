@@ -14,11 +14,8 @@ import (
 	"github.com/longhorn/longhorn-engine/pkg/replica"
 	replicaClient "github.com/longhorn/longhorn-engine/pkg/replica/client"
 	"github.com/longhorn/longhorn-engine/pkg/types"
+	diskutil "github.com/longhorn/longhorn-engine/pkg/util/disk"
 	"github.com/longhorn/longhorn-engine/proto/ptypes"
-)
-
-const (
-	VolumeHeadName = "volume-head"
 )
 
 type Task struct {
@@ -136,7 +133,7 @@ func (t *Task) DeleteSnapshot(snapshot string) error {
 		if ok, err := t.isRebuilding(r); err != nil {
 			return err
 		} else if ok {
-			return fmt.Errorf("Can not remove a snapshot because %s is rebuilding", r.Address)
+			return fmt.Errorf("cannot remove a snapshot because %s is rebuilding", r.Address)
 		}
 	}
 
@@ -262,20 +259,6 @@ func (t *Task) PurgeSnapshotStatus() (map[string]*SnapshotPurgeStatus, error) {
 	return replicaStatusMap, nil
 }
 
-func getNameAndIndex(chain []string, snapshot string) (string, int) {
-	index := find(chain, snapshot)
-	if index < 0 {
-		snapshot = fmt.Sprintf("volume-snap-%s.img", snapshot)
-		index = find(chain, snapshot)
-	}
-
-	if index < 0 {
-		return "", index
-	}
-
-	return snapshot, index
-}
-
 func (t *Task) isRebuilding(replicaInController *types.ControllerReplicaInfo) (bool, error) {
 	repClient, err := replicaClient.NewReplicaClient(replicaInController.Address)
 	if err != nil {
@@ -306,24 +289,9 @@ func (t *Task) isPurging(replicaInController *types.ControllerReplicaInfo) (bool
 	return status.IsPurging, nil
 }
 
-func (t *Task) isDirty(replicaInController *types.ControllerReplicaInfo) (bool, error) {
-	repClient, err := replicaClient.NewReplicaClient(replicaInController.Address)
-	if err != nil {
-		return false, err
-	}
-	defer repClient.Close()
-
-	replica, err := repClient.GetReplica()
-	if err != nil {
-		return false, err
-	}
-
-	return replica.Dirty, nil
-}
-
 func (t *Task) markSnapshotAsRemoved(replicaInController *types.ControllerReplicaInfo, snapshot string) error {
 	if replicaInController.Mode != types.RW {
-		return fmt.Errorf("Can only mark snapshot as removed from replica in mode RW, got %s", replicaInController.Mode)
+		return fmt.Errorf("can only mark snapshot as removed from replica in mode RW, got %s", replicaInController.Mode)
 	}
 
 	repClient, err := replicaClient.NewReplicaClient(replicaInController.Address)
@@ -337,15 +305,6 @@ func (t *Task) markSnapshotAsRemoved(replicaInController *types.ControllerReplic
 	}
 
 	return nil
-}
-
-func find(list []string, item string) int {
-	for i, val := range list {
-		if val == item {
-			return i
-		}
-	}
-	return -1
 }
 
 func (t *Task) AddRestoreReplica(volumeSize, volumeCurrentSize int64, replica string) error {
@@ -544,7 +503,7 @@ func (t *Task) reloadAndVerify(address string, repClient *replicaClient.ReplicaC
 func checkIfVolumeHeadExists(infoList []types.SyncFileInfo) bool {
 	// volume head has been synced by PrepareRebuild()
 	for _, info := range infoList {
-		if strings.Contains(info.FromFileName, VolumeHeadName) {
+		if strings.Contains(info.FromFileName, diskutil.VolumeHeadName) {
 			return true
 		}
 	}
@@ -675,30 +634,30 @@ func GetSnapshotsInfo(replicas []*types.ControllerReplicaInfo) (outputDisks map[
 		for name, disk := range disks {
 			snapshot := ""
 
-			if !replica.IsHeadDisk(name) {
-				snapshot, err = replica.GetSnapshotNameFromDiskName(name)
+			if !diskutil.IsHeadDisk(name) {
+				snapshot, err = diskutil.GetSnapshotNameFromDiskName(name)
 				if err != nil {
 					return nil, err
 				}
 			} else {
-				snapshot = VolumeHeadName
+				snapshot = diskutil.VolumeHeadName
 			}
 			children := map[string]bool{}
 			for childDisk := range disk.Children {
 				child := ""
-				if !replica.IsHeadDisk(childDisk) {
-					child, err = replica.GetSnapshotNameFromDiskName(childDisk)
+				if !diskutil.IsHeadDisk(childDisk) {
+					child, err = diskutil.GetSnapshotNameFromDiskName(childDisk)
 					if err != nil {
 						return nil, err
 					}
 				} else {
-					child = VolumeHeadName
+					child = diskutil.VolumeHeadName
 				}
 				children[child] = true
 			}
 			parent := ""
 			if disk.Parent != "" {
-				parent, err = replica.GetSnapshotNameFromDiskName(disk.Parent)
+				parent, err = diskutil.GetSnapshotNameFromDiskName(disk.Parent)
 				if err != nil {
 					return nil, err
 				}

@@ -20,15 +20,16 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/longhorn/backupstore"
+	"github.com/longhorn/sparse-tools/sparse"
+	sparserest "github.com/longhorn/sparse-tools/sparse/rest"
+
 	"github.com/longhorn/longhorn-engine/pkg/backup"
-	"github.com/longhorn/longhorn-engine/pkg/hash"
 	"github.com/longhorn/longhorn-engine/pkg/replica"
 	replicaclient "github.com/longhorn/longhorn-engine/pkg/replica/client"
 	"github.com/longhorn/longhorn-engine/pkg/types"
 	"github.com/longhorn/longhorn-engine/pkg/util"
+	diskutil "github.com/longhorn/longhorn-engine/pkg/util/disk"
 	"github.com/longhorn/longhorn-engine/proto/ptypes"
-	"github.com/longhorn/sparse-tools/sparse"
-	sparserest "github.com/longhorn/sparse-tools/sparse/rest"
 )
 
 /*
@@ -38,17 +39,11 @@ import (
  */
 
 const (
-	MaxBackupSize = 5
-
 	PeriodicRefreshIntervalInSeconds = 2
-
-	MaxSnapshotHashTaskSize = 10
 
 	GRPCServiceCommonTimeout = 3 * time.Minute
 
 	FileSyncTimeout = 120
-
-	VolumeHeadName = "volume-head"
 )
 
 type SyncAgentServer struct {
@@ -70,26 +65,8 @@ type SyncAgentServer struct {
 	PurgeStatus      *PurgeStatus
 	RebuildStatus    *RebuildStatus
 	CloneStatus      *CloneStatus
-}
 
-type BackupList struct {
-	sync.RWMutex
-	backups []*BackupInfo
-}
-
-type BackupInfo struct {
-	backupID     string
-	backupStatus *replica.BackupStatus
-}
-
-type SnapshotHashList struct {
-	sync.RWMutex
-	tasks []*SnapshotHashInfo
-}
-
-type SnapshotHashInfo struct {
-	snapshotName string
-	status       *replica.SnapshotHashStatus
+	snapshotHashingWorkerPool *util.WorkerPool
 }
 
 type PurgeStatus struct {
@@ -175,6 +152,8 @@ func NewSyncAgentServer(startPort, endPort int, replicaAddress string) *SyncAgen
 		PurgeStatus:      &PurgeStatus{},
 		RebuildStatus:    &RebuildStatus{},
 		CloneStatus:      &CloneStatus{},
+
+		snapshotHashingWorkerPool: util.NewWorkerPool(),
 	}
 }
 
@@ -241,9 +220,9 @@ func (s *SyncAgentServer) StartRestore(backupURL, requestedBackupName, snapshotD
 		var toFileName string
 		validLastRestoredBackup := s.canDoIncrementalRestore(restoreStatus, backupURL, requestedBackupName)
 		if validLastRestoredBackup {
-			toFileName = replica.GenerateDeltaFileName(restoreStatus.LastRestored)
+			toFileName = diskutil.GenerateDeltaFileName(restoreStatus.LastRestored)
 		} else {
-			toFileName = replica.GenerateSnapTempFileName(snapshotDiskName)
+			toFileName = diskutil.GenerateSnapTempFileName(snapshotDiskName)
 		}
 		s.RestoreInfo.StartNewRestore(backupURL, requestedBackupName, toFileName, snapshotDiskName, validLastRestoredBackup)
 	}
@@ -561,7 +540,7 @@ func (s *SyncAgentServer) SnapshotClone(ctx context.Context, req *ptypes.Snapsho
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := sourceReplica.Disks[replica.GenerateSnapshotDiskName(req.SnapshotFileName)]; !ok {
+	if _, ok := sourceReplica.Disks[diskutil.GenerateSnapshotDiskName(req.SnapshotFileName)]; !ok {
 		return nil, fmt.Errorf("cannot find snapshot %v in the source replica %v", req.SnapshotFileName, req.FromAddress)
 	}
 	snapshotSize, err := strconv.ParseInt(sourceReplica.Size, 10, 64)
@@ -627,7 +606,7 @@ func (s *SyncAgentServer) prepareClone(fromReplicaAddress, snapshotName string, 
 }
 
 func (s *SyncAgentServer) startCloning(req *ptypes.SnapshotCloneRequest, fromReplicaClient *replicaclient.ReplicaClient) error {
-	snapshotDiskName := replica.GenerateSnapshotDiskName(s.CloneStatus.SnapshotName)
+	snapshotDiskName := diskutil.GenerateSnapshotDiskName(s.CloneStatus.SnapshotName)
 	port, err := s.launchReceiver("SnapshotClone", snapshotDiskName, s.CloneStatus)
 	if err != nil {
 		return errors.Wrapf(err, "failed to launch receiver for snapshot %v", req.SnapshotFileName)
@@ -641,7 +620,7 @@ func (s *SyncAgentServer) startCloning(req *ptypes.SnapshotCloneRequest, fromRep
 }
 
 func (s *SyncAgentServer) postCloning() error {
-	snapshotDiskName := replica.GenerateSnapshotDiskName(s.CloneStatus.SnapshotName)
+	snapshotDiskName := diskutil.GenerateSnapshotDiskName(s.CloneStatus.SnapshotName)
 	if err := backup.CreateNewSnapshotMetafile(snapshotDiskName + ".meta"); err != nil {
 		return errors.Wrapf(err, "failed creating meta snapshot file")
 	}
@@ -756,7 +735,7 @@ func (s *SyncAgentServer) BackupStatus(ctx context.Context, req *ptypes.BackupSt
 		return nil, err
 	}
 
-	snapshotName, err := replica.GetSnapshotNameFromDiskName(replicaObj.SnapshotID)
+	snapshotName, err := diskutil.GetSnapshotNameFromDiskName(replicaObj.SnapshotID)
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't get snapshot name")
 	}
@@ -930,13 +909,13 @@ func (s *SyncAgentServer) postFullRestoreOperations(restoreStatus *replica.Resto
 
 func (s *SyncAgentServer) extraIncrementalFullRestoreOperations(restoreStatus *replica.RestoreStatus) error {
 	tmpSnapshotDiskName := restoreStatus.ToFileName
-	snapshotDiskName, err := replica.GetSnapshotNameFromTempFileName(tmpSnapshotDiskName)
+	snapshotDiskName, err := diskutil.GetSnapshotNameFromTempFileName(tmpSnapshotDiskName)
 	if err != nil {
 		logrus.Errorf("failed to get snapshotName from tempFileName: %v", err)
 		return err
 	}
-	snapshotDiskMetaName := replica.GenerateSnapshotDiskMetaName(snapshotDiskName)
-	tmpSnapshotDiskMetaName := replica.GenerateSnapshotDiskMetaName(tmpSnapshotDiskName)
+	snapshotDiskMetaName := diskutil.GenerateSnapshotDiskMetaName(snapshotDiskName)
+	tmpSnapshotDiskMetaName := diskutil.GenerateSnapshotDiskMetaName(tmpSnapshotDiskName)
 
 	defer func() {
 		// try to cleanup tmp files
@@ -1099,7 +1078,7 @@ func (s *SyncAgentServer) purgeSnapshots() (err error) {
 		if len(info.Children) == 0 {
 			leaves = append(leaves, snapshot)
 		}
-		if info.Name == VolumeHeadName {
+		if info.Name == diskutil.VolumeHeadName {
 			continue
 		}
 		// Mark system generated snapshots as removed
@@ -1135,13 +1114,13 @@ func (s *SyncAgentServer) purgeSnapshots() (err error) {
 				break
 			}
 			if info.Removed {
-				if info.Name == VolumeHeadName {
+				if info.Name == diskutil.VolumeHeadName {
 					return fmt.Errorf("BUG: Volume head was marked as removed")
 				}
 				// Process the snapshot directly behinds the volume head in the end
 				if latestSnapshot == "" {
 					for childName := range info.Children {
-						if childName == VolumeHeadName {
+						if childName == diskutil.VolumeHeadName {
 							latestSnapshot = snapshot
 							break
 						}
@@ -1263,30 +1242,30 @@ func getSnapshotsInfo(replicaClient *replicaclient.ReplicaClient) (map[string]ty
 	for name, disk := range disks {
 		snapshot := ""
 
-		if !replica.IsHeadDisk(name) {
-			snapshot, err = replica.GetSnapshotNameFromDiskName(name)
+		if !diskutil.IsHeadDisk(name) {
+			snapshot, err = diskutil.GetSnapshotNameFromDiskName(name)
 			if err != nil {
 				return nil, 0, err
 			}
 		} else {
-			snapshot = VolumeHeadName
+			snapshot = diskutil.VolumeHeadName
 		}
 		children := map[string]bool{}
 		for childDisk := range disk.Children {
 			child := ""
-			if !replica.IsHeadDisk(childDisk) {
-				child, err = replica.GetSnapshotNameFromDiskName(childDisk)
+			if !diskutil.IsHeadDisk(childDisk) {
+				child, err = diskutil.GetSnapshotNameFromDiskName(childDisk)
 				if err != nil {
 					return nil, 0, err
 				}
 			} else {
-				child = VolumeHeadName
+				child = diskutil.VolumeHeadName
 			}
 			children[child] = true
 		}
 		parent := ""
 		if disk.Parent != "" {
-			parent, err = replica.GetSnapshotNameFromDiskName(disk.Parent)
+			parent, err = diskutil.GetSnapshotNameFromDiskName(disk.Parent)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -1423,127 +1402,27 @@ func (s *SyncAgentServer) rmDisk(disk string) error {
 	return nil
 }
 
-// The APIs BackupAdd, BackupGet, Refresh, BackupDelete implement the CRUD interface for the backup object
-// The slice Backup.backupList is implemented similar to a FIFO queue.
-
-// Add creates a new backupList object and appends to the end of the list maintained by backup object
-func (b *BackupList) Add(backupID string, backup *replica.BackupStatus) error {
-	if backupID == "" {
-		return fmt.Errorf("empty backupID")
-	}
-
-	b.Lock()
-	b.backups = append(b.backups, &BackupInfo{
-		backupID:     backupID,
-		backupStatus: backup,
-	})
-	b.Unlock()
-
-	if err := b.Refresh(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Get takes backupID input and will return the backup object corresponding to that backupID or error if not found
-func (b *BackupList) Get(backupID string) (*replica.BackupStatus, error) {
-	if backupID == "" {
-		return nil, fmt.Errorf("empty backupID")
-	}
-
-	if err := b.Refresh(); err != nil {
-		return nil, err
-	}
-
-	b.RLock()
-	defer b.RUnlock()
-
-	for _, info := range b.backups {
-		if info.backupID == backupID {
-			return info.backupStatus, nil
-		}
-	}
-	return nil, fmt.Errorf("backup not found %v", backupID)
-}
-
-// remove deletes the object present at slice[index] and returns the remaining elements of slice yet maintaining
-// the original order of elements in the slice
-func (*BackupList) remove(b []*BackupInfo, index int) ([]*BackupInfo, error) {
-	if b == nil {
-		return nil, fmt.Errorf("empty list")
-	}
-	if index >= len(b) || index < 0 {
-		return nil, fmt.Errorf("BUG: attempting to delete an out of range index entry from backupList")
-	}
-	return append(b[:index], b[index+1:]...), nil
-}
-
-// Refresh deletes all the old completed backups from the front. Old backups are the completed backups
-// that are created before MaxBackupSize completed backups
-func (b *BackupList) Refresh() error {
-	b.Lock()
-	defer b.Unlock()
-
-	var index, completed int
-
-	for index = len(b.backups) - 1; index >= 0; index-- {
-		if b.backups[index].backupStatus.Progress == 100 {
-			if completed == MaxBackupSize {
-				break
-			}
-			completed++
-		}
-	}
-	if completed == MaxBackupSize {
-		// Remove all the older completed backups in the range backupList[0:index]
-		for ; index >= 0; index-- {
-			if b.backups[index].backupStatus.Progress == 100 {
-				updatedList, err := b.remove(b.backups, index)
-				if err != nil {
-					return err
-				}
-				b.backups = updatedList
-				// As this backupList[index] is removed, will have to decrement the index by one
-				index--
-			}
-		}
-	}
-	return nil
-}
-
-// Delete will delete the entry in the slice with the corresponding backupID
-func (b *BackupList) Delete(backupID string) error {
-	b.Lock()
-	defer b.Unlock()
-
-	for index, backup := range b.backups {
-		if backup.backupID == backupID {
-			updatedList, err := b.remove(b.backups, index)
-			if err != nil {
-				return err
-			}
-			b.backups = updatedList
-			return nil
-		}
-	}
-	return fmt.Errorf("backup not found %v", backupID)
-}
-
 func (s *SyncAgentServer) SnapshotHash(ctx context.Context, req *ptypes.SnapshotHashRequest) (*empty.Empty, error) {
 	if len(req.SnapshotNames) == 0 {
 		return nil, fmt.Errorf("snapshot name(s) is required")
 	}
 
-	status := hash.DoHashSnapshot(req.SnapshotNames, req.Rehash)
+	size := s.snapshotHashingWorkerPool.GetSize()
+	if req.ConcurrentLimit > 0 && int(req.ConcurrentLimit) != size {
+		s.snapshotHashingWorkerPool.Resize(int(req.ConcurrentLimit))
+	}
+
+	task := replica.NewSnapshotHashTask(req.SnapshotNames, req.Rehash)
 
 	if err := s.SnapshotHashList.Delete(req.SnapshotNames[0]); err != nil {
 		return nil, errors.Wrapf(err, "failed to delete snapshot %v for from list", req.SnapshotNames[0])
 	}
 
-	if err := s.SnapshotHashList.Add(req.SnapshotNames[0], status); err != nil {
+	if err := s.SnapshotHashList.Add(req.SnapshotNames[0], task); err != nil {
 		return nil, errors.Wrapf(err, "failed to add snapshot %v for hashing", req.SnapshotNames[0])
 	}
+
+	s.snapshotHashingWorkerPool.Exec(task)
 
 	return &empty.Empty{}, nil
 }
@@ -1560,102 +1439,4 @@ func (s *SyncAgentServer) SnapshotHashStatus(ctx context.Context, req *ptypes.Sn
 		Checksum: task.Checksum,
 		Error:    task.Error,
 	}, nil
-}
-
-func (s *SnapshotHashList) Add(snapshotName string, status *replica.SnapshotHashStatus) error {
-	if snapshotName == "" {
-		return fmt.Errorf("snapshot name is required")
-	}
-
-	if err := s.Refresh(); err != nil {
-		return err
-	}
-
-	s.Lock()
-	defer s.Unlock()
-	s.tasks = append(s.tasks, &SnapshotHashInfo{
-		snapshotName: snapshotName,
-		status:       status,
-	})
-
-	return nil
-}
-
-func (s *SnapshotHashList) Refresh() error {
-	s.Lock()
-	defer s.Unlock()
-
-	var index, completed int
-
-	for index = len(s.tasks) - 1; index >= 0; index-- {
-		if s.tasks[index].status.Progress == 100 {
-			if completed == MaxSnapshotHashTaskSize {
-				break
-			}
-			completed++
-		}
-	}
-	if completed == MaxSnapshotHashTaskSize {
-		// Remove all the older completed tasks in the range snapshotHashList[0:index]
-		for ; index >= 0; index-- {
-			if s.tasks[index].status.Progress == 100 {
-				updatedList, err := s.remove(s.tasks, index)
-				if err != nil {
-					return err
-				}
-				s.tasks = updatedList
-				// As this snapshotHashList[index] is removed, will have to decrement the index by one
-				index--
-			}
-		}
-	}
-	return nil
-}
-
-func (s *SnapshotHashList) remove(l []*SnapshotHashInfo, index int) ([]*SnapshotHashInfo, error) {
-	if l == nil {
-		return nil, fmt.Errorf("empty list")
-	}
-	if index >= len(l) || index < 0 {
-		return nil, fmt.Errorf("BUG: attempting to delete an out of range index entry from snapshotHashList")
-	}
-	return append(l[:index], l[index+1:]...), nil
-}
-
-func (s *SnapshotHashList) Get(snapshotName string) (*replica.SnapshotHashStatus, error) {
-	if snapshotName == "" {
-		return nil, fmt.Errorf("snapshot name is required")
-	}
-
-	if err := s.Refresh(); err != nil {
-		return nil, err
-	}
-
-	s.RLock()
-	defer s.RUnlock()
-
-	for _, info := range s.tasks {
-		if info.snapshotName == snapshotName {
-			return info.status, nil
-		}
-	}
-	return nil, fmt.Errorf("snapshot %v is not found", snapshotName)
-}
-
-// Delete will delete the entry in the slice with the corresponding snapshotName
-func (s *SnapshotHashList) Delete(snapshotName string) error {
-	s.Lock()
-	defer s.Unlock()
-
-	for index, task := range s.tasks {
-		if task.snapshotName == snapshotName {
-			updatedList, err := s.remove(s.tasks, index)
-			if err != nil {
-				return err
-			}
-			s.tasks = updatedList
-			return nil
-		}
-	}
-	return nil
 }
