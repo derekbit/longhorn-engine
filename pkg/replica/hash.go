@@ -2,9 +2,11 @@ package replica
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"hash"
+	"hash/crc64"
 	"os"
 	"sync"
 
@@ -18,6 +20,8 @@ import (
 )
 
 const (
+	defaultHashMethod = "crc64"
+
 	xattrSnapshotHashName     = "user.longhorn.hash"
 	xattrSnapshotHashValueMax = 256
 )
@@ -41,6 +45,7 @@ type SnapshotHashTask struct {
 }
 
 type SnapshotXattrHashInfo struct {
+	Method   string `json:"method"`
 	Checksum string `json:"checksum"`
 	ModTime  string `json:"modTime"`
 }
@@ -161,6 +166,7 @@ func (t *SnapshotHashTask) getSnapshotHashInfoFromXattr() (string, string, error
 
 func (t *SnapshotHashTask) setSnapshotHashInfoToXattr(checksum, modTime string) error {
 	xattrSnapshotHashValue, err := json.Marshal(&SnapshotXattrHashInfo{
+		Method:   defaultHashMethod,
 		Checksum: checksum,
 		ModTime:  modTime,
 	})
@@ -197,7 +203,10 @@ func (t *SnapshotHashTask) hashSnapshot() (string, error) {
 	}
 	defer t.closeSnapshot()
 
-	h := sha256.New()
+	h, err := newHashMethod(defaultHashMethod)
+	if err != nil {
+		return "", err
+	}
 
 	size := t.getSize()
 	blkCounts := size / backupstore.DEFAULT_BLOCK_SIZE
@@ -217,4 +226,13 @@ func (t *SnapshotHashTask) hashSnapshot() (string, error) {
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func newHashMethod(method string) (hash.Hash, error) {
+	switch method {
+	case "crc64":
+		return crc64.New(crc64.MakeTable(crc64.ISO)), nil
+	default:
+		return nil, fmt.Errorf("invalid hash method %v", method)
+	}
 }
