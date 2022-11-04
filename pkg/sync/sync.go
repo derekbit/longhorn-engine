@@ -55,6 +55,13 @@ type SnapshotCloneStatus struct {
 	SnapshotName       string `json:"snapshotName"`
 }
 
+type SnapshotHashStatus struct {
+	State             string `json:"state"`
+	Checksum          string `json:"checksum"`
+	Error             string `json:"error"`
+	SilentlyCorrupted bool   `json:"silentlyCorrupted"`
+}
+
 func NewTaskError(res ...ReplicaError) *TaskError {
 	return &TaskError{
 		ReplicaErrors: append([]ReplicaError{}, res...),
@@ -132,6 +139,10 @@ func (t *Task) DeleteSnapshot(snapshot string) error {
 
 	for _, replica := range replicas {
 		if err = t.markSnapshotAsRemoved(replica, snapshot); err != nil {
+			return err
+		}
+
+		if err = t.cancelSnapshotHashJob(replica, snapshot); err != nil {
 			return err
 		}
 	}
@@ -294,6 +305,20 @@ func (t *Task) markSnapshotAsRemoved(replicaInController *types.ControllerReplic
 	defer repClient.Close()
 
 	if err := repClient.MarkDiskAsRemoved(snapshot); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *Task) cancelSnapshotHashJob(replicaInController *types.ControllerReplicaInfo, snapshot string) error {
+	repClient, err := replicaClient.NewReplicaClient(replicaInController.Address)
+	if err != nil {
+		return err
+	}
+	defer repClient.Close()
+
+	if err := repClient.SnapshotHashCancel(snapshot); err != nil {
 		return err
 	}
 
@@ -846,4 +871,179 @@ func CloneStatus(engineControllerClient *client.ControllerClient) (map[string]*S
 		}
 	}
 	return cloneStatusMap, nil
+}
+
+func (t *Task) HashSnapshot(snapshotName string, rehash bool) error {
+	replicas, err := t.client.ReplicaList()
+	if err != nil {
+		return err
+	}
+
+	for _, r := range replicas {
+		if r.Mode != types.RW {
+			return fmt.Errorf("cannot request hashing snapshot because %v is in %v mode", r.Address, r.Mode)
+		}
+
+		if ok, err := t.isRebuilding(r); err != nil {
+			return err
+		} else if ok {
+			return fmt.Errorf("cannot request hashing snapshot because %s is rebuilding", r.Address)
+		}
+	}
+
+	taskErr := NewTaskError()
+	syncErrorMap := sync.Map{}
+	var wg sync.WaitGroup
+	wg.Add(len(replicas))
+
+	for _, r := range replicas {
+		go func(r *types.ControllerReplicaInfo) {
+			defer wg.Done()
+			repClient, err := replicaClient.NewReplicaClient(r.Address)
+			if err != nil {
+				syncErrorMap.Store(r.Address, err)
+				return
+			}
+			defer repClient.Close()
+			if err := repClient.SnapshotHash(snapshotName, rehash); err != nil {
+				syncErrorMap.Store(r.Address, err)
+			}
+		}(r)
+	}
+
+	wg.Wait()
+
+	for _, r := range replicas {
+		if v, ok := syncErrorMap.Load(r.Address); ok {
+			err = v.(error)
+			taskErr.Append(NewReplicaError(r.Address, err))
+		}
+	}
+	if taskErr.HasError() {
+		return taskErr
+	}
+
+	return nil
+}
+
+func (t *Task) HashSnapshotStatus(snapshotName string) (map[string]*SnapshotHashStatus, error) {
+	hashStatusMap := make(map[string]*SnapshotHashStatus)
+	var lock sync.Mutex
+
+	replicas, err := t.client.ReplicaList()
+	if err != nil {
+		return nil, err
+	}
+
+	// clean up clients after processing
+	var clients []*replicaClient.ReplicaClient
+	defer func() {
+		for _, client := range clients {
+			_ = client.Close()
+		}
+	}()
+
+	wg := sync.WaitGroup{}
+
+	for _, r := range replicas {
+		wg.Add(1)
+
+		go func(r *types.ControllerReplicaInfo) error {
+			defer wg.Done()
+
+			var status *ptypes.SnapshotHashStatusResponse
+			var err error
+
+			defer func() {
+				lock.Lock()
+				defer lock.Unlock()
+
+				if err == nil {
+					hashStatusMap[r.Address] = &SnapshotHashStatus{
+						State:    status.State,
+						Checksum: status.Checksum,
+						Error:    status.Error,
+					}
+				} else {
+					hashStatusMap[r.Address] = &SnapshotHashStatus{
+						State: string(replica.ProgressStateError),
+						Error: err.Error(),
+					}
+				}
+			}()
+
+			repClient, err := replicaClient.NewReplicaClient(r.Address)
+			if err != nil {
+				return errors.Wrapf(err, "failed to create replica client to %v", r.Address)
+			}
+
+			lock.Lock()
+			clients = append(clients, repClient)
+			lock.Unlock()
+
+			if r.Mode != types.RW {
+				return fmt.Errorf("replica %v since it is in %v mode", r.Address, r.Mode)
+			}
+
+			if ok, err := t.isRebuilding(r); err != nil {
+				return errors.Wrapf(err, "cannot get snapshot hashing status of %v", r.Address)
+			} else if ok {
+				return fmt.Errorf("replica %v is rebuilding", r.Address)
+			}
+
+			status, err = repClient.SnapshotHashStatus(snapshotName)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get snapshot hashing status of %v", r.Address)
+			} else if status == nil {
+				return fmt.Errorf("BUG: nil snapshot hashing status from %v", r.Address)
+			}
+
+			return nil
+		}(r)
+	}
+
+	wg.Wait()
+
+	return hashStatusMap, nil
+}
+
+func (t *Task) HashSnapshotCancel(snapshotName string) error {
+	replicas, err := t.client.ReplicaList()
+	if err != nil {
+		return err
+	}
+
+	taskErr := NewTaskError()
+	syncErrorMap := sync.Map{}
+	var wg sync.WaitGroup
+	wg.Add(len(replicas))
+
+	for _, r := range replicas {
+		go func(r *types.ControllerReplicaInfo) {
+			defer wg.Done()
+			repClient, err := replicaClient.NewReplicaClient(r.Address)
+			if err != nil {
+				syncErrorMap.Store(r.Address, err)
+				return
+			}
+			defer repClient.Close()
+			if err := repClient.SnapshotHashCancel(snapshotName); err != nil {
+				syncErrorMap.Store(r.Address, err)
+			}
+		}(r)
+	}
+
+	wg.Wait()
+
+	for _, r := range replicas {
+		if v, ok := syncErrorMap.Load(r.Address); ok {
+			err = v.(error)
+			taskErr.Append(NewReplicaError(r.Address, err))
+		}
+	}
+	if taskErr.HasError() {
+		return taskErr
+	}
+
+	return nil
 }
