@@ -39,8 +39,6 @@ import (
  */
 
 const (
-	MaxBackupSize = 5
-
 	PeriodicRefreshIntervalInSeconds = 2
 
 	GRPCServiceCommonTimeout = 3 * time.Minute
@@ -61,21 +59,12 @@ type SyncAgentServer struct {
 	isCloning       bool
 	replicaAddress  string
 
-	BackupList    *BackupList
-	RestoreInfo   *replica.RestoreStatus
-	PurgeStatus   *PurgeStatus
-	RebuildStatus *RebuildStatus
-	CloneStatus   *CloneStatus
-}
-
-type BackupList struct {
-	sync.RWMutex
-	backups []*BackupInfo
-}
-
-type BackupInfo struct {
-	backupID     string
-	backupStatus *replica.BackupStatus
+	BackupList       *BackupList
+	SnapshotHashList *SnapshotHashList
+	RestoreInfo      *replica.RestoreStatus
+	PurgeStatus      *PurgeStatus
+	RebuildStatus    *RebuildStatus
+	CloneStatus      *CloneStatus
 }
 
 type PurgeStatus struct {
@@ -147,11 +136,12 @@ func NewSyncAgentServer(startPort, endPort int, replicaAddress string) *SyncAgen
 		processesByPort: map[int]string{},
 		replicaAddress:  replicaAddress,
 
-		BackupList:    &BackupList{},
-		RestoreInfo:   &replica.RestoreStatus{},
-		PurgeStatus:   &PurgeStatus{},
-		RebuildStatus: &RebuildStatus{},
-		CloneStatus:   &CloneStatus{},
+		BackupList:       &BackupList{},
+		SnapshotHashList: &SnapshotHashList{},
+		RestoreInfo:      &replica.RestoreStatus{},
+		PurgeStatus:      &PurgeStatus{},
+		RebuildStatus:    &RebuildStatus{},
+		CloneStatus:      &CloneStatus{},
 	}
 }
 
@@ -302,6 +292,7 @@ func (s *SyncAgentServer) Reset(ctx context.Context, req *empty.Empty) (*empty.E
 	}
 	s.isRestoring = false
 	s.BackupList = &BackupList{}
+	s.SnapshotHashList = &SnapshotHashList{}
 	s.RestoreInfo = &replica.RestoreStatus{}
 	s.RebuildStatus = &RebuildStatus{}
 	s.PurgeStatus = &PurgeStatus{}
@@ -1399,109 +1390,61 @@ func (s *SyncAgentServer) rmDisk(disk string) error {
 	return nil
 }
 
-// The APIs BackupAdd, BackupGet, Refresh, BackupDelete implement the CRUD interface for the backup object
-// The slice Backup.backupList is implemented similar to a FIFO queue.
-
-// BackupAdd creates a new backupList object and appends to the end of the list maintained by backup object
-func (b *BackupList) BackupAdd(backupID string, backup *replica.BackupStatus) error {
-	if backupID == "" {
-		return fmt.Errorf("empty backupID")
+func (s *SyncAgentServer) SnapshotHash(ctx context.Context, req *ptypes.SnapshotHashRequest) (*empty.Empty, error) {
+	if req.SnapshotName == "" {
+		return nil, fmt.Errorf("snapshot name is required")
 	}
 
-	b.Lock()
-	b.backups = append(b.backups, &BackupInfo{
-		backupID:     backupID,
-		backupStatus: backup,
-	})
-	b.Unlock()
+	task := replica.NewSnapshotHashTask(req.SnapshotName, req.Rehash)
 
-	if err := b.Refresh(); err != nil {
-		return err
+	if err := s.SnapshotHashList.Add(req.SnapshotName, task); err != nil {
+		return nil, errors.Wrapf(err, "failed to add snapshot %v for hashing", req.SnapshotName)
 	}
 
-	return nil
+	go task.Execute()
+
+	return &empty.Empty{}, nil
 }
 
-// BackupGet takes backupID input and will return the backup object corresponding to that backupID or error if not found
-func (b *BackupList) BackupGet(backupID string) (*replica.BackupStatus, error) {
-	if backupID == "" {
-		return nil, fmt.Errorf("empty backupID")
+func checkSnapshotHashStatusFromXattr(snapshotName string) (string, error) {
+	checksum, modTime, err := replica.GetSnapshotHashInfoFromXattr(snapshotName)
+	if err != nil {
+		return "", err
+	}
+	currentModTime, err := replica.GetSnapshotModTime(snapshotName)
+	if err != nil {
+		return "", err
 	}
 
-	if err := b.Refresh(); err != nil {
-		return nil, err
+	if modTime != currentModTime {
+		return "", fmt.Errorf("snapshot %v is changed", snapshotName)
 	}
 
-	b.RLock()
-	defer b.RUnlock()
-
-	for _, info := range b.backups {
-		if info.backupID == backupID {
-			return info.backupStatus, nil
-		}
-	}
-	return nil, fmt.Errorf("backup not found %v", backupID)
+	return checksum, nil
 }
 
-// remove deletes the object present at slice[index] and returns the remaining elements of slice yet maintaining
-// the original order of elements in the slice
-func (*BackupList) remove(b []*BackupInfo, index int) ([]*BackupInfo, error) {
-	if b == nil {
-		return nil, fmt.Errorf("empty list")
-	}
-	if index >= len(b) || index < 0 {
-		return nil, fmt.Errorf("BUG: attempting to delete an out of range index entry from backupList")
-	}
-	return append(b[:index], b[index+1:]...), nil
-}
-
-// Refresh deletes all the old completed backups from the front. Old backups are the completed backups
-// that are created before MaxBackupSize completed backups
-func (b *BackupList) Refresh() error {
-	b.Lock()
-	defer b.Unlock()
-
-	var index, completed int
-
-	for index = len(b.backups) - 1; index >= 0; index-- {
-		if b.backups[index].backupStatus.Progress == 100 {
-			if completed == MaxBackupSize {
-				break
-			}
-			completed++
+func (s *SyncAgentServer) SnapshotHashStatus(ctx context.Context, req *ptypes.SnapshotHashStatusRequest) (*ptypes.SnapshotHashStatusResponse, error) {
+	task, err := s.SnapshotHashList.Get(req.SnapshotName)
+	if err != nil {
+		checksum, err := checkSnapshotHashStatusFromXattr(req.SnapshotName)
+		if err != nil {
+			return &ptypes.SnapshotHashStatusResponse{
+				State: string(replica.ProgressStateError),
+				Error: err.Error(),
+			}, nil
 		}
+		return &ptypes.SnapshotHashStatusResponse{
+			State:    string(replica.ProgressStateComplete),
+			Checksum: checksum,
+		}, nil
 	}
-	if completed == MaxBackupSize {
-		// Remove all the older completed backups in the range backupList[0:index]
-		for ; index >= 0; index-- {
-			if b.backups[index].backupStatus.Progress == 100 {
-				updatedList, err := b.remove(b.backups, index)
-				if err != nil {
-					return err
-				}
-				b.backups = updatedList
-				// As this backupList[index] is removed, will have to decrement the index by one
-				index--
-			}
-		}
-	}
-	return nil
-}
 
-// BackupDelete will delete the entry in the slice with the corresponding backupID
-func (b *BackupList) BackupDelete(backupID string) error {
-	b.Lock()
-	defer b.Unlock()
-
-	for index, backup := range b.backups {
-		if backup.backupID == backupID {
-			updatedList, err := b.remove(b.backups, index)
-			if err != nil {
-				return err
-			}
-			b.backups = updatedList
-			return nil
-		}
-	}
-	return fmt.Errorf("backup not found %v", backupID)
+	task.StatusLock.Lock()
+	defer task.StatusLock.Unlock()
+	return &ptypes.SnapshotHashStatusResponse{
+		State:             string(task.State),
+		Checksum:          task.Checksum,
+		Error:             task.Error,
+		SilentlyCorrupted: task.SilentlyCorrupted,
+	}, nil
 }
