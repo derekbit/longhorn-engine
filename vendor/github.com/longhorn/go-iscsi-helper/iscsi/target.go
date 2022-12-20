@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/longhorn/go-iscsi-helper/util"
 )
 
@@ -111,13 +113,9 @@ func UpdateLun(tid int, lun int, params map[string]string) error {
 	return err
 }
 
-// DisableWriteCache will set param write-cache to false for the LUN
-func DisableWriteCache(tid int, lun int) error {
-	// Mode page 8 is the caching mode page
-	// Refer to "Caching Mode page (08h)" in SCSI Commands Reference Manual for more information.
-	// https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf
-	// https://github.com/fujita/tgt/blob/master/scripts/tgt-admin#L418
-	return UpdateLun(tid, lun, map[string]string{"mode_page": "8:0:18:0x10:0:0xff:0xff:0:0:0xff:0xff:0xff:0xff:0x80:0x14:0:0:0:0:0:0"})
+// SetLunThinProvisioning will set param thin_provisioning to true for the LUN
+func SetLunThinProvisioning(tid int, lun int) error {
+	return UpdateLun(tid, lun, map[string]string{"thin_provisioning": "1"})
 }
 
 // DeleteLun will remove a LUN from an target
@@ -128,6 +126,21 @@ func DeleteLun(tid int, lun int) error {
 		"--mode", "logicalunit",
 		"--tid", strconv.Itoa(tid),
 		"--lun", strconv.Itoa(lun),
+	}
+	_, err := util.Execute(tgtBinary, opts)
+	return err
+}
+
+// ExpandLun will update the size for the LUN.
+// This is valid only for the customized tgt https://github.com/rancher/tgt/
+func ExpandLun(tid, lun int, size int64) error {
+	opts := []string{
+		"--lld", "iscsi",
+		"--op", "update",
+		"--mode", "logicalunit",
+		"--tid", strconv.Itoa(tid),
+		"--lun", strconv.Itoa(lun),
+		"--params", fmt.Sprintf("bsopts=size=%d", size),
 	}
 	_, err := util.Execute(tgtBinary, opts)
 	return err
@@ -253,7 +266,7 @@ func GetTargetTid(name string) (int, error) {
 			tidString := strings.Fields(strings.Split(scanner.Text(), ":")[0])[1]
 			tid, err = strconv.Atoi(tidString)
 			if err != nil {
-				return -1, fmt.Errorf("BUG: Failed to parse %s, %v", tidString, err)
+				return -1, errors.Wrapf(err, "BUG: Failed to parse %s, %v", tidString)
 			}
 			break
 		}
@@ -370,7 +383,7 @@ func FindNextAvailableTargetID() (int, error) {
 			tidString := strings.Fields(strings.Split(scanner.Text(), ":")[0])[1]
 			tid, err = strconv.Atoi(tidString)
 			if err != nil {
-				return -1, fmt.Errorf("BUG: Failed to parse %s, %v", tidString, err)
+				return -1, errors.Wrapf(err, "BUG: Failed to parse %s", tidString)
 			}
 			existingTids[tid] = struct{}{}
 		}

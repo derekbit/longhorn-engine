@@ -29,11 +29,34 @@ const (
 	scanModeManual = "manual"
 	scanModeAuto   = "auto"
 	ScanTimeout    = 10 * time.Second
+
+	shellBinary = "sh"
 )
 
 func CheckForInitiatorExistence(ne *util.NamespaceExecutor) error {
 	opts := []string{
 		"--version",
+	}
+	_, err := ne.Execute(iscsiBinary, opts)
+	return err
+}
+
+func UpdateScsiDeviceTimeout(devName string, timeout int64, ne *util.NamespaceExecutor) error {
+	opts := []string{
+		"-c",
+		fmt.Sprintf("echo %v > /sys/block/%v/device/timeout", timeout, devName),
+	}
+	_, err := ne.Execute(shellBinary, opts)
+	return err
+}
+
+func UpdateIscsiDeviceAbortTimeout(target string, timeout int64, ne *util.NamespaceExecutor) error {
+	opts := []string{
+		"-m", "node",
+		"-T", target,
+		"-o", "update",
+		"-n", "node.session.err_timeo.abort_timeout",
+		"-v", strconv.FormatInt(timeout, 10),
 	}
 	_, err := ne.Execute(iscsiBinary, opts)
 	return err
@@ -276,7 +299,7 @@ func findScsiDevice(ip, target string, lun int, ne *util.NamespaceExecutor) (*ut
 	}
 
 	if name == "" {
-		return nil, fmt.Errorf("cannot find iscsi device")
+		return nil, fmt.Errorf("cannot find iSCSI device")
 	}
 
 	// now that we know the device is mapped, we can get it's (major:minor)
@@ -287,7 +310,7 @@ func findScsiDevice(ip, target string, lun int, ne *util.NamespaceExecutor) (*ut
 
 	dev, known := devices[name]
 	if !known {
-		return nil, fmt.Errorf("cannot find kernel device for iscsi device: %s", name)
+		return nil, fmt.Errorf("cannot find kernel device for iSCSI device: %s", name)
 	}
 
 	return dev, nil
@@ -324,4 +347,17 @@ func CleanupScsiNodes(target string, ne *util.NamespaceExecutor) error {
 		}
 	}
 	return nil
+}
+
+func RescanTarget(ip, target string, ne *util.NamespaceExecutor) error {
+	opts := []string{
+		"-m", "node",
+		"-T", target,
+		"-R",
+	}
+	if ip != "" {
+		opts = append(opts, "-p", ip)
+	}
+	_, err := ne.Execute(iscsiBinary, opts)
+	return err
 }
