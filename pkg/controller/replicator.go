@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -29,9 +30,8 @@ type replicator struct {
 	backendsAvailable bool
 	backends          map[string]backendWrapper
 	writerIndex       map[int]string
-	readerIndex       map[int]string
 	unmapperIndex     map[int]string
-	readers           []io.ReaderAt
+	readers           map[string]io.ReaderAt
 	writer            io.WriterAt
 	unmapper          types.UnmapperAt
 	next              int
@@ -116,29 +116,28 @@ func (r *replicator) ReadAt(buf []byte, off int64) (int, error) {
 		return 0, ErrNoBackend
 	}
 
-	numReaders := len(r.readers)
-	r.next = (r.next + 1) % numReaders
-	index := r.next
 	retError := &BackendError{
 		Errors: map[string]error{},
 	}
 
-	for i := 0; i < numReaders; i++ {
-		reader := r.readers[index]
-		startTime := time.Now()
-		n, err = reader.ReadAt(buf, off)
-		if err == nil {
-			r.UpdateLatencyStatistics(r.readerIndex[index], time.Since(startTime).Nanoseconds())
-			break
+	v := r.readerSelection.selector.Next()
+	address := v.(string)
+
+	reader := r.readers[address]
+
+	startTime := time.Now()
+	n, err = reader.ReadAt(buf, off)
+	if err == nil {
+		if len(buf) == 131072 {
+			r.UpdateLatencyStatistics(address, time.Since(startTime).Nanoseconds())
 		}
-		logrus.WithError(err).Errorf("Failed to read: index %v, off %v, len %v", index, off, len(buf))
-		retError.Errors[r.readerIndex[index]] = err
-		index = (index + 1) % numReaders
+		return n, nil
 	}
-	if len(retError.Errors) != 0 {
-		return n, retError
-	}
-	return n, nil
+
+	logrus.WithError(err).Errorf("Failed to read: address %v, off %v, len %v", address, off, len(buf))
+	retError.Errors[address] = err
+
+	return n, retError
 }
 
 func (r *replicator) WriteAt(p []byte, off int64) (int, error) {
@@ -190,7 +189,7 @@ func (r *replicator) UnmapAt(length uint32, off int64) (int, error) {
 func (r *replicator) buildReaderWriterUnmappers() {
 	r.reset(false)
 
-	readers := []io.ReaderAt{}
+	readers := map[string]io.ReaderAt{}
 	writers := []io.WriterAt{}
 	unmappers := []types.UnmapperAt{}
 
@@ -202,8 +201,7 @@ func (r *replicator) buildReaderWriterUnmappers() {
 			unmappers = append(unmappers, b.backend)
 		}
 		if b.mode == types.RW {
-			r.readerIndex[len(readers)] = address
-			readers = append(readers, b.backend)
+			readers[address] = b.backend
 		}
 	}
 
@@ -360,7 +358,6 @@ func (r *replicator) reset(full bool) {
 	r.writer = nil
 	r.unmapper = nil
 	r.writerIndex = map[int]string{}
-	r.readerIndex = map[int]string{}
 	r.unmapperIndex = map[int]string{}
 
 	if full {
@@ -382,19 +379,35 @@ func (r *replicator) UpdateReaderSelection() {
 	r.readerSelection.Lock()
 	defer r.readerSelection.Unlock()
 
+	NewWeights := map[interface{}]int{}
+	for address, backend := range r.backends {
+		weight := 1
+		if backend.latencyStatistics.averageLatency > 0 {
+			weight = int(math.Ceil(float64(maxLatency) / float64(backend.latencyStatistics.averageLatency)))
+		}
+		NewWeights[address] = int(weight)
+	}
+
+	CurrentWeights := r.readerSelection.selector.All()
+	if CurrentWeights == nil {
+		for address, weight := range NewWeights {
+			r.readerSelection.selector.Add(address, weight)
+		}
+		logrus.Infof("Created reader selection rules: %+v", NewWeights)
+		return
+	}
+
+	if reflect.DeepEqual(CurrentWeights, NewWeights) {
+		return
+	}
+
 	r.readerSelection.selector.Reset()
 	r.readerSelection.selector.RemoveAll()
 
-	for address, backend := range r.backends {
-		weighted := 1
-		if backend.latencyStatistics.averageLatency > 0 {
-			weighted := math.Ceil(float64(maxLatency) / float64(backend.latencyStatistics.averageLatency))
-			if weighted == 0 {
-				weighted = 1
-			}
-		}
-		r.readerSelection.selector.Add(address, int(weighted))
+	for address, weight := range NewWeights {
+		r.readerSelection.selector.Add(address, weight)
 	}
+	logrus.Infof("Updated reader selection rules: %+v", NewWeights)
 }
 
 type latencyStatistics struct {

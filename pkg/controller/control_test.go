@@ -115,7 +115,6 @@ func newMockReplicator(readSource, writeSource []byte) *replicator {
 		backendsAvailable: true,
 		backends:          map[string]backendWrapper{},
 		writerIndex:       map[int]string{0: "fakeWriter"},
-		readerIndex:       map[int]string{0: "fakeReader"},
 		readers:           []io.ReaderAt{&fakeReader{source: readSource}},
 		writer:            &fakeWriter{source: writeSource},
 		next:              0,
