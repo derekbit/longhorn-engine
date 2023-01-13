@@ -7,8 +7,11 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/sirupsen/logrus"
+	"github.com/smallnest/weighted"
 
 	"github.com/longhorn/longhorn-engine/pkg/types"
 )
@@ -16,6 +19,11 @@ import (
 var (
 	ErrNoBackend = errors.New("no backend available")
 )
+
+type replicaSelection struct {
+	sync.RWMutex
+	selector *weighted.SW
+}
 
 type replicator struct {
 	backendsAvailable bool
@@ -27,6 +35,8 @@ type replicator struct {
 	writer            io.WriterAt
 	unmapper          types.UnmapperAt
 	next              int
+
+	readerSelection replicaSelection
 }
 
 type BackendError struct {
@@ -65,9 +75,13 @@ func (r *replicator) AddBackend(address string, backend types.Backend, mode type
 	r.backends[address] = backendWrapper{
 		backend: backend,
 		mode:    mode,
+		latencyStatistics: &latencyStatistics{
+			latencies: queue.NewRingBuffer(1024),
+		},
 	}
 
 	r.buildReaderWriterUnmappers()
+	r.UpdateReaderSelection()
 }
 
 func (r *replicator) RemoveBackend(address string) {
@@ -87,7 +101,9 @@ func (r *replicator) RemoveBackend(address string) {
 		go backend.backend.Close()
 	}
 	delete(r.backends, address)
+
 	r.buildReaderWriterUnmappers()
+	r.UpdateReaderSelection()
 }
 
 func (r *replicator) ReadAt(buf []byte, off int64) (int, error) {
@@ -100,21 +116,24 @@ func (r *replicator) ReadAt(buf []byte, off int64) (int, error) {
 		return 0, ErrNoBackend
 	}
 
-	readersLen := len(r.readers)
-	r.next = (r.next + 1) % readersLen
+	numReaders := len(r.readers)
+	r.next = (r.next + 1) % numReaders
 	index := r.next
 	retError := &BackendError{
 		Errors: map[string]error{},
 	}
-	for i := 0; i < readersLen; i++ {
+
+	for i := 0; i < numReaders; i++ {
 		reader := r.readers[index]
+		startTime := time.Now()
 		n, err = reader.ReadAt(buf, off)
 		if err == nil {
+			r.UpdateLatencyStatistics(r.readerIndex[index], time.Since(startTime).Nanoseconds())
 			break
 		}
 		logrus.WithError(err).Errorf("Failed to read: index %v, off %v, len %v", index, off, len(buf))
 		retError.Errors[r.readerIndex[index]] = err
-		index = (index + 1) % readersLen
+		index = (index + 1) % numReaders
 	}
 	if len(retError.Errors) != 0 {
 		return n, retError
@@ -349,9 +368,80 @@ func (r *replicator) reset(full bool) {
 	}
 }
 
+func (r *replicator) UpdateReaderSelection() {
+	maxLatency := int64(0)
+	for _, backend := range r.backends {
+		if backend.latencyStatistics.averageLatency == 0 {
+			continue
+		}
+		if backend.latencyStatistics.averageLatency > maxLatency {
+			maxLatency = backend.latencyStatistics.averageLatency
+		}
+	}
+
+	r.readerSelection.Lock()
+	defer r.readerSelection.Unlock()
+
+	r.readerSelection.selector.Reset()
+	r.readerSelection.selector.RemoveAll()
+
+	for address, backend := range r.backends {
+		weighted := 1
+		if backend.latencyStatistics.averageLatency > 0 {
+			weighted := math.Ceil(float64(maxLatency) / float64(backend.latencyStatistics.averageLatency))
+			if weighted == 0 {
+				weighted = 1
+			}
+		}
+		r.readerSelection.selector.Add(address, int(weighted))
+	}
+}
+
+type latencyStatistics struct {
+	sync.RWMutex
+
+	latencies      *queue.RingBuffer
+	averageLatency int64
+}
+
 type backendWrapper struct {
 	backend types.Backend
 	mode    types.Mode
+
+	latencyStatistics *latencyStatistics
+}
+
+func (r *replicator) UpdateLatencyStatistics(address string, latency int64) {
+	backend, ok := r.backends[address]
+	if !ok {
+		return
+	}
+
+	latencyStatistics := backend.latencyStatistics
+
+	latencyStatistics.Lock()
+	defer latencyStatistics.Unlock()
+
+	latencies := latencyStatistics.latencies
+
+	deltaLatency := int64(0)
+	if latencies.Len() == latencies.Cap() {
+		v, err := latencyStatistics.latencies.Get()
+		if err != nil {
+			return
+		}
+
+		lastLatency, ok := v.(int64)
+		if !ok {
+			return
+		}
+		latencyStatistics.latencies.Put(latency)
+		deltaLatency = (latency - lastLatency) / int64(latencies.Cap())
+	} else {
+		latencyStatistics.latencies.Put(latency)
+		deltaLatency = (latency - latencyStatistics.averageLatency) / int64(latencies.Len())
+	}
+	latencyStatistics.averageLatency += deltaLatency
 }
 
 func (r *replicator) RemainSnapshots() (int, error) {

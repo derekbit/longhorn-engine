@@ -3,6 +3,7 @@ module github.com/longhorn/longhorn-engine
 go 1.13
 
 require (
+	github.com/Workiva/go-datastructures v1.0.53
 	github.com/c9s/goprocinfo v0.0.0-20190309065803-0b2ad9ac246b // indirect
 	github.com/docker/go-units v0.3.3
 	github.com/fatih/color v1.7.0 // indirect
@@ -23,6 +24,7 @@ require (
 	github.com/rancher/go-fibmap v0.0.0-20160418233256-5fc9f8c1ed47
 	github.com/rancher/go-rancher v0.1.1-0.20190307222549-9756097e5e4c
 	github.com/sirupsen/logrus v1.8.1
+	github.com/smallnest/weighted v0.0.0-20221208081316-3995bfd8f628
 	github.com/urfave/cli v1.22.1
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f

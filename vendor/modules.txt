@@ -1,3 +1,5 @@
+# github.com/Workiva/go-datastructures v1.0.53
+github.com/Workiva/go-datastructures/queue
 # github.com/aws/aws-sdk-go v1.34.2
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/arn
@@ -117,8 +119,12 @@ github.com/russross/blackfriday/v2
 github.com/shurcooL/sanitized_anchor_name
 # github.com/sirupsen/logrus v1.8.1
 github.com/sirupsen/logrus
+# github.com/smallnest/weighted v0.0.0-20221208081316-3995bfd8f628
+github.com/smallnest/weighted
 # github.com/urfave/cli v1.22.1
 github.com/urfave/cli
+# golang.org/x/exp v0.0.0-20200119233911-0405dc783f0a
+golang.org/x/exp/rand
 # golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 golang.org/x/net/context
 golang.org/x/net/http/httpguts

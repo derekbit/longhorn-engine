@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/smallnest/weighted"
 	"google.golang.org/grpc"
 
 	iutil "github.com/longhorn/go-iscsi-helper/util"
@@ -86,6 +87,7 @@ func NewController(name string, factory types.BackendFactory, frontend types.Fro
 	}
 	c.reset()
 	c.metricsStart()
+	c.readerSelectionStart()
 	return c
 }
 
@@ -980,7 +982,11 @@ func (c *Controller) handleError(err error) error {
 
 func (c *Controller) reset() {
 	c.replicas = []types.Replica{}
-	c.backend = &replicator{}
+	c.backend = &replicator{
+		readerSelection: replicaSelection{
+			selector: &weighted.SW{},
+		},
+	}
 }
 
 func (c *Controller) Close() error {
@@ -1099,6 +1105,17 @@ func (c *Controller) metricsStart() {
 			c.latestMetrics = c.metrics
 			c.metrics = &types.Metrics{}
 			c.metricsLock.Unlock()
+		}
+	}()
+}
+
+func (c *Controller) readerSelectionStart() {
+	go func() {
+		for {
+			time.Sleep(1 * time.Minute)
+			c.RLock()
+			c.backend.UpdateReaderSelection()
+			c.RUnlock()
 		}
 	}()
 }
