@@ -23,8 +23,10 @@ const (
 	PingInterval = 2 * time.Second
 )
 
-func New() types.BackendFactory {
-	return &Factory{}
+func New(protocol types.DataServerProtocol) types.BackendFactory {
+	return &Factory{
+		dataServerProtocol: protocol,
+	}
 }
 
 type RevisionCounter struct {
@@ -32,6 +34,7 @@ type RevisionCounter struct {
 }
 
 type Factory struct {
+	dataServerProtocol types.DataServerProtocol
 }
 
 type Remote struct {
@@ -278,10 +281,10 @@ func (r *Remote) info() (*types.ReplicaInfo, error) {
 	return replicaClient.GetReplicaInfo(resp.Replica), nil
 }
 
-func (rf *Factory) Create(volumeName, address string, dataServerProtocol types.DataServerProtocol, engineToReplicaTimeout time.Duration) (types.Backend, error) {
-	logrus.Infof("Connecting to remote: %s (%v)", address, dataServerProtocol)
+func (rf *Factory) Create(volumeName, address string, engineToReplicaTimeout time.Duration) (types.Backend, error) {
+	logrus.Infof("Connecting to remote: %s (%v)", address, rf.dataServerProtocol)
 
-	controlAddress, dataAddress, _, _, err := util.GetAddresses(volumeName, address, dataServerProtocol)
+	controlAddress, dataAddress, _, _, err := util.GetAddresses(volumeName, address, rf.dataServerProtocol)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +307,7 @@ func (rf *Factory) Create(volumeName, address string, dataServerProtocol types.D
 		return nil, fmt.Errorf("replica must be closed, cannot add in state: %s", replica.State)
 	}
 
-	conn, err := connect(dataServerProtocol, dataAddress)
+	conn, err := connect(rf.dataServerProtocol, dataAddress)
 	if err != nil {
 		return nil, err
 	}

@@ -142,7 +142,7 @@ func startController(c *cli.Context) error {
 		case "file":
 			factories[backend] = file.New()
 		case "tcp":
-			factories[backend] = remote.New()
+			factories[backend] = remote.New(types.DataServerProtocol(dataServerProtocol))
 		default:
 			logrus.Fatalf("Unsupported backend: %s", backend)
 		}
@@ -159,9 +159,9 @@ func startController(c *cli.Context) error {
 
 	logrus.Infof("Creating volume %v controller with iSCSI target request timeout %v and engine to replica(s) timeout %v",
 		name, iscsiTargetRequestTimeout, engineReplicaTimeout)
-	control := controller.NewController(name, dynamic.New(factories), frontend, isUpgrade, disableRevCounter, salvageRequested,
-		unmapMarkSnapChainRemoved, iscsiTargetRequestTimeout, engineReplicaTimeout, types.DataServerProtocol(dataServerProtocol),
-		fileSyncHTTPClientTimeout)
+	control := controller.NewController(name, dynamic.New(factories), frontend,
+		isUpgrade, disableRevCounter, salvageRequested, unmapMarkSnapChainRemoved, iscsiTargetRequestTimeout,
+		engineReplicaTimeout, fileSyncHTTPClientTimeout)
 
 	// need to wait for Shutdown() completion
 	control.ShutdownWG.Add(1)
