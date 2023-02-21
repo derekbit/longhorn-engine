@@ -23,18 +23,14 @@ const (
 	PingInterval = 2 * time.Second
 )
 
+type Factory struct {
+	dataServerProtocol types.DataServerProtocol
+}
+
 func New(protocol types.DataServerProtocol) types.BackendFactory {
 	return &Factory{
 		dataServerProtocol: protocol,
 	}
-}
-
-type RevisionCounter struct {
-	Counter int64 `json:"counter,string"`
-}
-
-type Factory struct {
-	dataServerProtocol types.DataServerProtocol
 }
 
 type Remote struct {
@@ -307,12 +303,16 @@ func (rf *Factory) Create(volumeName, address string, engineToReplicaTimeout tim
 		return nil, fmt.Errorf("replica must be closed, cannot add in state: %s", replica.State)
 	}
 
-	conn, err := connect(rf.dataServerProtocol, dataAddress)
+	logrus.Infof("Establishing data path connection to %v with protocol %v", dataAddress, rf.dataServerProtocol)
+	dataConn, err := connect(rf.dataServerProtocol, dataAddress)
 	if err != nil {
 		return nil, err
 	}
 
-	dataConnClient := dataconn.NewClient(conn, engineToReplicaTimeout)
+	dataConnClient, err := dataconn.NewClient(dataConn, engineToReplicaTimeout)
+	if err != nil {
+		return nil, err
+	}
 	r.ReaderWriterUnmapperAt = dataConnClient
 
 	if err := r.open(); err != nil {
@@ -324,12 +324,12 @@ func (rf *Factory) Create(volumeName, address string, engineToReplicaTimeout tim
 	return r, nil
 }
 
-func connect(dataServerProtocol types.DataServerProtocol, address string) (net.Conn, error) {
+func connect(dataServerProtocol types.DataServerProtocol, dataAddress string) (net.Conn, error) {
 	switch dataServerProtocol {
 	case types.DataServerProtocolTCP:
-		return net.Dial(string(dataServerProtocol), address)
+		return net.Dial(string(dataServerProtocol), dataAddress)
 	case types.DataServerProtocolUNIX:
-		unixAddr, err := net.ResolveUnixAddr("unix", address)
+		unixAddr, err := net.ResolveUnixAddr(string(dataServerProtocol), dataAddress)
 		if err != nil {
 			return nil, err
 		}
@@ -339,7 +339,7 @@ func connect(dataServerProtocol types.DataServerProtocol, address string) (net.C
 	}
 }
 
-func (r *Remote) monitorPing(client *dataconn.Client) {
+func (r *Remote) monitorPing(client dataconn.DataConnClient) {
 	ticker := time.NewTicker(PingInterval)
 	defer ticker.Stop()
 

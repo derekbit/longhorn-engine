@@ -304,7 +304,7 @@ func RandomID(randomIDLenth int) string {
 	return UUID()[:randomIDLenth]
 }
 
-func GetAddresses(volumeName, address string, dataServerProtocol types.DataServerProtocol) (string, string, string, int, error) {
+func GetAddresses(volumeName, address string, dataServerProtocol types.DataServerProtocol) (controlAddress, dataAddress, syncAddress string, syncPort int, err error) {
 	switch dataServerProtocol {
 	case types.DataServerProtocolTCP:
 		return ParseAddresses(address)
