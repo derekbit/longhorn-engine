@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/longhorn/longhorn-engine/pkg/backingfile"
 	"github.com/longhorn/longhorn-engine/pkg/types"
+	"github.com/longhorn/longhorn-engine/pkg/util"
 )
 
 type Server struct {
@@ -19,6 +21,8 @@ type Server struct {
 	backing                   *backingfile.BackingFile
 	revisionCounterDisabled   bool
 	unmapMarkDiskChainRemoved bool
+
+	util.Perf
 }
 
 func NewServer(dir string, backing *backingfile.BackingFile, sectorSize int64, disableRevCounter, unmapMarkDiskChainRemoved bool) *Server {
@@ -287,6 +291,8 @@ func (s *Server) Close() error {
 		return err
 	}
 
+	logrus.Infof("Performance measurement of server: elapsed=%v, count=%v", s.Perf.TimeElapsed, s.Perf.Count)
+
 	s.r = nil
 	return nil
 }
@@ -295,10 +301,22 @@ func (s *Server) WriteAt(buf []byte, offset int64) (int, error) {
 	s.RLock()
 	defer s.RUnlock()
 
+	if len(buf) == 4096 {
+		s.Perf.Lock()
+		start := time.Now()
+		defer func() {
+			s.Perf.TimeElapsed += time.Since(start).Microseconds()
+			s.Perf.Count += 1
+			s.Perf.Unlock()
+		}()
+	}
+
 	if s.r == nil {
 		return 0, fmt.Errorf("replica no longer exist")
 	}
+
 	i, err := s.r.WriteAt(buf, offset)
+
 	return i, err
 }
 
