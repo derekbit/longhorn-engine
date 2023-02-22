@@ -7,10 +7,12 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/longhorn/longhorn-engine/pkg/types"
+	"github.com/longhorn/longhorn-engine/pkg/util"
 )
 
 var (
@@ -27,6 +29,8 @@ type replicator struct {
 	writer            io.WriterAt
 	unmapper          types.UnmapperAt
 	next              int
+
+	util.Perf
 }
 
 type BackendError struct {
@@ -123,6 +127,16 @@ func (r *replicator) ReadAt(buf []byte, off int64) (int, error) {
 }
 
 func (r *replicator) WriteAt(p []byte, off int64) (int, error) {
+	if len(p) == 4096 {
+		r.Perf.Lock()
+		start := time.Now()
+		defer func() {
+			r.Perf.TimeElapsed += time.Since(start).Microseconds()
+			r.Perf.Count += 1
+			r.Perf.Unlock()
+		}()
+	}
+
 	if !r.backendsAvailable {
 		return 0, ErrNoBackend
 	}
@@ -332,6 +346,8 @@ func (r *replicator) Close() error {
 	}
 
 	r.reset(true)
+
+	logrus.Infof("Performance measurement of replicator: elapsed=%v, count=%v", r.Perf.TimeElapsed, r.Perf.Count)
 
 	return lastErr
 }
