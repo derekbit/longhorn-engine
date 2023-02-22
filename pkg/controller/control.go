@@ -56,6 +56,8 @@ type Controller struct {
 	lastExpansionError string
 
 	fileSyncHTTPClientTimeout int
+
+	util.Perf
 }
 
 const (
@@ -823,6 +825,16 @@ func (c *Controller) Start(volumeSize, volumeCurrentSize int64, addresses ...str
 }
 
 func (c *Controller) WriteAt(b []byte, off int64) (int, error) {
+	if len(b) == 4096 {
+		c.Perf.Lock()
+		start := time.Now()
+		defer func() {
+			c.Perf.TimeElapsed += time.Since(start).Microseconds()
+			c.Perf.Count += 1
+			c.Perf.Unlock()
+		}()
+	}
+
 	c.RLock()
 	l := len(b)
 	if off < 0 || off+int64(l) > c.size {
@@ -984,6 +996,8 @@ func (c *Controller) reset() {
 }
 
 func (c *Controller) Close() error {
+	logrus.Infof("Performance measurement of controller: elapsed=%v, count=%v", c.Perf.TimeElapsed, c.Perf.Count)
+
 	return c.Shutdown()
 }
 

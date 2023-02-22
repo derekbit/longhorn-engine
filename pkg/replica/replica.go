@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/rancher/go-fibmap"
 
@@ -63,6 +64,8 @@ type Replica struct {
 	revisionCounterDisabled bool
 
 	unmapMarkDiskChainRemoved bool
+
+	util.Perf
 }
 
 type Info struct {
@@ -610,6 +613,8 @@ func (r *Replica) closeWithoutWritingMetaData() {
 }
 
 func (r *Replica) close() error {
+	logrus.Infof("Performance measurement of replica: elapsed=%v, count=%v", r.Perf.TimeElapsed, r.Perf.Count)
+
 	r.closeWithoutWritingMetaData()
 	return r.writeVolumeMetaData(false, r.info.Rebuilding)
 }
@@ -1217,6 +1222,16 @@ func (r *Replica) Expand(size int64) (err error) {
 }
 
 func (r *Replica) WriteAt(buf []byte, offset int64) (int, error) {
+	if len(buf) == 4096 {
+		r.Perf.Lock()
+		start := time.Now()
+		defer func() {
+			r.Perf.TimeElapsed += time.Since(start).Microseconds()
+			r.Perf.Count += 1
+			r.Perf.Unlock()
+		}()
+	}
+
 	if r.readOnly {
 		return 0, fmt.Errorf("cannot write on read-only replica")
 	}
