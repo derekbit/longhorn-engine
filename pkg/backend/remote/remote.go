@@ -330,6 +330,8 @@ func connect(dataServerProtocol types.DataServerProtocol, dataAddress string) (n
 			return nil, err
 		}
 		return net.DialUnix("unix", nil, unixAddr)
+	case types.DataServerProtocolFifo:
+		return util.DialFifo(dataAddress)
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %v", dataServerProtocol)
 	}

@@ -33,6 +33,7 @@ var (
 	HostProc = "/host/proc"
 
 	unixDomainSocketDirectoryInContainer = "/host/var/lib/longhorn/unix-domain-socket/"
+	fifoDirectoryInContainer             = "/host/var/lib/longhorn/fifo/"
 )
 
 const (
@@ -304,7 +305,7 @@ func RandomID(randomIDLenth int) string {
 	return UUID()[:randomIDLenth]
 }
 
-func GetAddresses(volumeName, address string, dataServerProtocol types.DataServerProtocol) (string, string, string, int, error) {
+func GetAddresses(volumeName, address string, dataServerProtocol types.DataServerProtocol) (controlAddress, dataAddress, syncAddress string, syncPort int, err error) {
 	switch dataServerProtocol {
 	case types.DataServerProtocolTCP:
 		return ParseAddresses(address)
@@ -312,6 +313,10 @@ func GetAddresses(volumeName, address string, dataServerProtocol types.DataServe
 		controlAddress, _, syncAddress, syncPort, err := ParseAddresses(address)
 		sockPath := filepath.Join(unixDomainSocketDirectoryInContainer, volumeName+".sock")
 		return controlAddress, sockPath, syncAddress, syncPort, err
+	case types.DataServerProtocolFifo:
+		controlAddress, _, syncAddress, syncPort, err := ParseAddresses(address)
+		fifoPath := filepath.Join(fifoDirectoryInContainer, volumeName)
+		return controlAddress, fifoPath, syncAddress, syncPort, err
 	default:
 		return "", "", "", -1, fmt.Errorf("unsupported protocol: %v", dataServerProtocol)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/longhorn/longhorn-engine/pkg/dataconn"
 	"github.com/longhorn/longhorn-engine/pkg/replica"
 	"github.com/longhorn/longhorn-engine/pkg/types"
+	"github.com/longhorn/longhorn-engine/pkg/util"
 )
 
 type DataServer struct {
@@ -31,6 +32,8 @@ func (s *DataServer) ListenAndServe() error {
 		return s.listenAndServeTCP()
 	case types.DataServerProtocolUNIX:
 		return s.listenAndServeUNIX()
+	case types.DataServerProtocolFifo:
+		return s.listenAndServeFifo()
 	default:
 		return fmt.Errorf("unsupported protocol: %v", s.protocol)
 	}
@@ -85,5 +88,18 @@ func (s *DataServer) listenAndServeUNIX() error {
 			server := dataconn.NewServer(conn, s.s)
 			server.Handle()
 		}(conn)
+	}
+}
+
+func (s *DataServer) listenAndServeFifo() error {
+	conn, err := util.ListenFifo(s.address)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	for {
+		server := dataconn.NewServer(conn, s.s)
+		server.Handle()
 	}
 }
