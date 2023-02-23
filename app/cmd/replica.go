@@ -91,17 +91,19 @@ func startReplica(c *cli.Context) error {
 	}
 
 	dir := c.Args()[0]
+
+	volumeName := c.String("volume-name")
+	address := c.String("listen")
+	dataServerProtocol := c.String("data-server-protocol")
+	disableRevCounter := c.Bool("disableRevCounter")
+	unmapMarkDiskChainRemoved := c.Bool("unmap-mark-disk-chain-removed")
+
 	backingFile, err := backingfile.OpenBackingFile(c.String("backing-file"))
 	if err != nil {
 		return err
 	}
 
-	disableRevCounter := c.Bool("disableRevCounter")
-	unmapMarkDiskChainRemoved := c.Bool("unmap-mark-disk-chain-removed")
-
 	s := replica.NewServer(dir, backingFile, diskutil.ReplicaSectorSize, disableRevCounter, unmapMarkDiskChainRemoved)
-
-	address := c.String("listen")
 
 	size := c.String("size")
 	if size != "" {
@@ -114,9 +116,6 @@ func startReplica(c *cli.Context) error {
 			return err
 		}
 	}
-
-	volumeName := c.String("volume-name")
-	dataServerProtocol := c.String("data-server-protocol")
 
 	controlAddress, dataAddress, syncAddress, syncPort, err :=
 		util.GetAddresses(volumeName, address, types.DataServerProtocol(dataServerProtocol))
@@ -176,9 +175,9 @@ func startReplica(c *cli.Context) error {
 			cmd.Dir = dir
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
-			logrus.Infof("Listening on sync agent server %s", syncAddress)
+			logrus.Infof("Listening on sync-agent server %s", syncAddress)
 			err := cmd.Run()
-			logrus.WithError(err).Warnf("Replica sync agent at %v is down", syncAddress)
+			logrus.WithError(err).Warnf("Replica sync-agent at %v is down", syncAddress)
 			resp <- err
 		}()
 	}

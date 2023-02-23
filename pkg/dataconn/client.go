@@ -16,7 +16,7 @@ var (
 	ErrRWTimeout = errors.New("r/w timeout")
 )
 
-//Client replica client
+// Client replica client
 type Client struct {
 	end       chan struct{}
 	requests  chan *Message
@@ -29,7 +29,7 @@ type Client struct {
 	opTimeout time.Duration
 }
 
-//NewClient replica client
+// NewClient replica client using network protocol
 func NewClient(conn net.Conn, engineToReplicaTimeout time.Duration) *Client {
 	c := &Client{
 		wire:      NewWire(conn),
@@ -47,12 +47,12 @@ func NewClient(conn net.Conn, engineToReplicaTimeout time.Duration) *Client {
 	return c
 }
 
-//TargetID operation target ID
-func (c *Client) TargetID() string {
+// TargetID operation target ID
+func (c *Client) targetID() string {
 	return c.peerAddr
 }
 
-//WriteAt replica client
+// WriteAt replica client
 func (c *Client) WriteAt(buf []byte, offset int64) (int, error) {
 	return c.operation(TypeWrite, buf, uint32(len(buf)), offset)
 }
@@ -62,19 +62,19 @@ func (c *Client) UnmapAt(length uint32, offset int64) (int, error) {
 	return c.operation(TypeUnmap, nil, length, offset)
 }
 
-//SetError replica client transport error
+// SetError replica client transport error
 func (c *Client) SetError(err error) {
 	c.responses <- &Message{
 		transportErr: err,
 	}
 }
 
-//ReadAt replica client
+// ReadAt replica client
 func (c *Client) ReadAt(buf []byte, offset int64) (int, error) {
 	return c.operation(TypeRead, buf, uint32(len(buf)), offset)
 }
 
-//Ping replica client
+// Ping replica client
 func (c *Client) Ping() error {
 	_, err := c.operation(TypePing, nil, 0, 0)
 	return err
@@ -109,7 +109,7 @@ func (c *Client) operation(op uint32, buf []byte, length uint32, offset int64) (
 	return int(msg.Size), nil
 }
 
-//Close replica client
+// Close replica client
 func (c *Client) Close() {
 	c.wire.Close()
 	c.end <- struct{}{}
@@ -209,13 +209,13 @@ func (c *Client) replyError(req *Message, err error) {
 func (c *Client) handleRequest(req *Message) {
 	switch req.Type {
 	case TypeRead:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpRead, int(req.Size))
+		req.ID = journal.InsertPendingOp(time.Now(), c.targetID(), journal.OpRead, int(req.Size))
 	case TypeWrite:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpWrite, int(req.Size))
+		req.ID = journal.InsertPendingOp(time.Now(), c.targetID(), journal.OpWrite, int(req.Size))
 	case TypeUnmap:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpUnmap, int(req.Size))
+		req.ID = journal.InsertPendingOp(time.Now(), c.targetID(), journal.OpUnmap, int(req.Size))
 	case TypePing:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpPing, 0)
+		req.ID = journal.InsertPendingOp(time.Now(), c.targetID(), journal.OpPing, 0)
 	}
 
 	req.MagicVersion = MagicVersion

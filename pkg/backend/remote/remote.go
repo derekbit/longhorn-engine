@@ -23,15 +23,14 @@ const (
 	PingInterval = 2 * time.Second
 )
 
-func New() types.BackendFactory {
-	return &Factory{}
-}
-
-type RevisionCounter struct {
-	Counter int64 `json:"counter,string"`
-}
-
 type Factory struct {
+	dataServerProtocol types.DataServerProtocol
+}
+
+func New(protocol types.DataServerProtocol) types.BackendFactory {
+	return &Factory{
+		dataServerProtocol: protocol,
+	}
 }
 
 type Remote struct {
@@ -278,10 +277,10 @@ func (r *Remote) info() (*types.ReplicaInfo, error) {
 	return replicaClient.GetReplicaInfo(resp.Replica), nil
 }
 
-func (rf *Factory) Create(volumeName, address string, dataServerProtocol types.DataServerProtocol, engineToReplicaTimeout time.Duration) (types.Backend, error) {
-	logrus.Infof("Connecting to remote: %s (%v)", address, dataServerProtocol)
+func (rf *Factory) Create(volumeName, address string, engineToReplicaTimeout time.Duration) (types.Backend, error) {
+	logrus.Infof("Connecting to remote: %s (%v)", address, rf.dataServerProtocol)
 
-	controlAddress, dataAddress, _, _, err := util.GetAddresses(volumeName, address, dataServerProtocol)
+	controlAddress, dataAddress, _, _, err := util.GetAddresses(volumeName, address, rf.dataServerProtocol)
 	if err != nil {
 		return nil, err
 	}
@@ -304,12 +303,12 @@ func (rf *Factory) Create(volumeName, address string, dataServerProtocol types.D
 		return nil, fmt.Errorf("replica must be closed, cannot add in state: %s", replica.State)
 	}
 
-	conn, err := connect(dataServerProtocol, dataAddress)
+	logrus.Infof("Establishing data path connection to %v with protocol %v", dataAddress, rf.dataServerProtocol)
+	dataConn, err := connect(rf.dataServerProtocol, dataAddress)
 	if err != nil {
 		return nil, err
 	}
-
-	dataConnClient := dataconn.NewClient(conn, engineToReplicaTimeout)
+	dataConnClient := dataconn.NewClient(dataConn, engineToReplicaTimeout)
 	r.ReaderWriterUnmapperAt = dataConnClient
 
 	if err := r.open(); err != nil {
@@ -321,12 +320,12 @@ func (rf *Factory) Create(volumeName, address string, dataServerProtocol types.D
 	return r, nil
 }
 
-func connect(dataServerProtocol types.DataServerProtocol, address string) (net.Conn, error) {
+func connect(dataServerProtocol types.DataServerProtocol, dataAddress string) (net.Conn, error) {
 	switch dataServerProtocol {
 	case types.DataServerProtocolTCP:
-		return net.Dial(string(dataServerProtocol), address)
+		return net.Dial(string(dataServerProtocol), dataAddress)
 	case types.DataServerProtocolUNIX:
-		unixAddr, err := net.ResolveUnixAddr("unix", address)
+		unixAddr, err := net.ResolveUnixAddr(string(dataServerProtocol), dataAddress)
 		if err != nil {
 			return nil, err
 		}

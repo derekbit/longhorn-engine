@@ -188,7 +188,7 @@ func (s *SyncAgentServer) StartRestore(backupURL, requestedBackupName, snapshotD
 	}
 
 	if s.RestoreInfo == nil {
-		return fmt.Errorf("BUG: the restore status is not initialized in the sync agent server")
+		return fmt.Errorf("BUG: the restore status is not initialized in the sync-agent server")
 	}
 
 	restoreStatus := s.RestoreInfo.DeepCopy()
