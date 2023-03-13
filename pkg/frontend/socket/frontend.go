@@ -17,7 +17,7 @@ import (
 const (
 	frontendName = "socket"
 
-	SocketDirectory = "/var/run"
+	SocketDirectory = "/var/run/longhorn"
 	DevPath         = "/dev/longhorn/"
 )
 
@@ -119,7 +119,7 @@ func (t *Socket) startSocketServerListen(rwu types.ReaderWriterUnmapperAt) error
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			logrus.Error("Failed to accept socket connection")
+			logrus.WithError(err).Error("Failed to accept socket connection")
 			continue
 		}
 		go t.handleServerConnection(conn, rwu)

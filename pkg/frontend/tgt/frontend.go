@@ -42,7 +42,7 @@ func (t *Tgt) Init(name string, size, sectorSize int64) error {
 	}
 
 	ldc := longhorndev.LonghornDeviceCreator{}
-	dev, err := ldc.NewDevice(name, size, t.frontendName,
+	dev, err := ldc.NewIscsiBlockDevice(name, size, t.frontendName,
 		int64(t.scsiTimeout.Seconds()),
 		int64(t.iscsiAbortTimeout.Seconds()),
 		int64(t.iscsiTargetRequestTimeout.Seconds()))
@@ -103,7 +103,7 @@ func (t *Tgt) Endpoint() string {
 
 func (t *Tgt) Upgrade(name string, size, sectorSize int64, rwu types.ReaderWriterUnmapperAt) error {
 	ldc := longhorndev.LonghornDeviceCreator{}
-	dev, err := ldc.NewDevice(name, size, t.frontendName,
+	dev, err := ldc.NewIscsiBlockDevice(name, size, t.frontendName,
 		int64(t.scsiTimeout.Seconds()),
 		int64(t.iscsiAbortTimeout.Seconds()),
 		int64(t.iscsiTargetRequestTimeout.Seconds()))

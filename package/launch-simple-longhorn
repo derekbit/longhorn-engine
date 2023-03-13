@@ -7,19 +7,20 @@ mount --rbind /host/dev /dev
 volume=$1
 size=$2
 frontend=$3
+data_server_protocol=$4
 
 if [ -z $volume ]
 then
-        echo "Usage: launch-simple-longhorn <volume_name> <frontend> "
-        echo "<volume_name>: Required. User defined volume name"
-        echo "<frontend>: Optional. By default 'tgt-blockdev'. "
+    echo "Usage: launch-simple-longhorn <volume_name> <frontend> "
+    echo "<volume_name>: Required. User defined volume name"
+    echo "<frontend>: Optional. By default 'tgt-blockdev'. "
 	exit -1
 fi
 
 if [ -z $size ]
 then
-        echo Use default size 1g
-        size="1g"
+    echo Use default size 1g
+    size="1g"
 fi
 
 if [ -z $frontend ]
@@ -42,14 +43,20 @@ function start() {
     done
     set -e
 
-    tgtd -f 2>&1 | tee /var/log/tgtd.log &
+    if [ "$frontend" != "ublk" ]; then
+        tgtd -f 2>&1 | tee /var/log/tgtd.log &
+    fi
 
-    longhorn-instance-manager process create --name "$volume-r" --binary /usr/local/bin/longhorn --port-count 15 --port-args "--listen,localhost:" -- replica /volume/ "--size" $size
+    if [ x"$data_server_protocol" = x"" ]; then
+        data_server_protocol="tcp"
+    fi
+
+    longhorn-instance-manager process create --name "$volume-r" --binary /usr/local/bin/longhorn --port-count 15 --port-args "--listen,localhost:" -- replica /volume/ "--size" $size --data-server-protocol unix --volume-name $volume
 
     # wait for the replica to be started
     sleep 5
 
-    longhorn-instance-manager process create --name "$volume-e" --binary /usr/local/bin/longhorn --port-count 1 --port-args "--listen,localhost:" -- controller $volume --frontend $frontend "--size" $size "--current-size" $size --replica tcp://localhost:10000
+    longhorn-instance-manager process create --name "$volume-e" --binary /usr/local/bin/longhorn --port-count 1 --port-args "--listen,localhost:" -- controller $volume --frontend $frontend "--size" $size "--current-size" $size --replica tcp://localhost:10000 --data-server-protocol $data_server_protocol
 }
 
 start &
