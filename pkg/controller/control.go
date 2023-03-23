@@ -695,9 +695,6 @@ func determineCorrectVolumeSize(volumeSize, volumeCurrentSize int64, backendSize
 }
 
 func (c *Controller) Start(volumeSize, volumeCurrentSize int64, addresses ...string) error {
-	c.Lock()
-	defer c.Unlock()
-
 	if len(addresses) == 0 {
 		return nil
 	}
