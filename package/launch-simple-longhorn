@@ -4,32 +4,74 @@ set -x
 set -e
 mount --rbind /host/dev /dev
 
-volume=$1
-size=$2
-frontend=$3
-data_server_protocol=$4
+frontend="tgt-blockdev"
+data_server_protocol="tcp"
 
-if [ -z $volume ]
-then
-    echo "Usage: launch-simple-longhorn <volume_name> <frontend> "
-    echo "<volume_name>: Required. User defined volume name"
-    echo "<frontend>: Optional. By default 'tgt-blockdev'. "
-	exit -1
-fi
+show_help() {
+    cat << EOF
+Usage: $(basename "$0") [option...]
+Options:
+  -h, --help		                        Show this help.
+  -v, --volume <name>		                Volume name.
+  -s, --size <size>		                    Volume size.
+  -f, --frontend <tgt-blockdev|ublk>	    Frontend type.
+  -p, --data-server-protocol <tcp|unix>     Data server protocol.
+EOF
+}
 
-if [ -z $size ]
-then
-    echo Use default size 1g
-    size="1g"
-fi
+missing() {
+    printf 'ERROR: Missing %s (%s)\n' "$1" "$2" >&2
+    exit 2
+}
 
-if [ -z $frontend ]
-then
-        echo Use default frontend TGT block device
-        frontend="tgt-blockdev"
-fi
+while :; do
+    case $1 in
+	-h|--help)
+	    show_help >&2
+	    exit 0
+	    ;;
+	-v|--volume)
+	    if [[ $2 ]]; then
+		volume+=("$2")
+		shift
+	    else
+		missing "volume" $1
+	    fi
+	    ;;
+	-s|--size)
+	    if [[ $2 ]]; then
+		size+=("$2")
+		shift
+	    else
+		missing "size" $1
+	    fi
+	    ;;
+	-f|--frontend)
+	    if [[ $2 ]]; then
+		frontend+=("$2")
+		shift
+	    else
+		missing "frontend" $1
+	    fi
+	    ;;
+	-p|--data_server_protocol)
+	    if [[ $2 ]]; then
+		data_server_protocol+=("$2")
+		shift
+	    else
+		missing "data-server-protocol" $1
+	    fi
+	    ;;
+	--) shift; break ;;
+	-?*) printf 'WARN: Ignoring unknown option %s\n' $1 >&2 ;;
+	*) break ;;
+    esac
 
-function start() {
+    shift
+done
+
+# ============== main logic ==============
+function start_grpc_health_probe() {
     set +e
     while true;
     do
@@ -41,24 +83,43 @@ function start() {
         fi
         sleep 1
     done
-    set -e
+    set -e 
+}
 
-    if [ "$frontend" != "ublk" ]; then
-        tgtd -f 2>&1 | tee /var/log/tgtd.log &
-    fi
+function start_tgtd() {
+    tgtd -f 2>&1 | tee /var/log/tgtd.log &
+}
 
-    if [ x"$data_server_protocol" = x"" ]; then
-        data_server_protocol="tcp"
-    fi
+function start_replica_process() {
+    longhorn-instance-manager process create --name "$volume-r" --binary /usr/local/bin/longhorn --port-count 15 --port-args "--listen,localhost:" -- \
+        replica /volume/ \
+            --size $size \
+            --data-server-protocol $data_server_protocol \
+            --volume-name $volume
+}
 
-    longhorn-instance-manager process create --name "$volume-r" --binary /usr/local/bin/longhorn --port-count 15 --port-args "--listen,localhost:" -- replica /volume/ "--size" $size --data-server-protocol unix --volume-name $volume
+function start_engine_process() {
+    longhorn-instance-manager process create --name "$volume-e" --binary /usr/local/bin/longhorn --port-count 1 --port-args "--listen,localhost:" -- \
+        controller $volume \
+            --frontend $frontend \
+            --size $size \
+            --current-size $size \
+            --replica tcp://localhost:10000 \
+            --data-server-protocol $data_server_protocol
+}
+
+function main() {
+    start_grpc_health_probe
+    start_tgtd
+
+    start_replica_process
 
     # wait for the replica to be started
     sleep 5
 
-    longhorn-instance-manager process create --name "$volume-e" --binary /usr/local/bin/longhorn --port-count 1 --port-args "--listen,localhost:" -- controller $volume --frontend $frontend "--size" $size "--current-size" $size --replica tcp://localhost:10000 --data-server-protocol $data_server_protocol
+    start_engine_process
 }
 
-start &
+main &
 
 exec longhorn-instance-manager daemon
