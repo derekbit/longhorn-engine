@@ -34,7 +34,7 @@ while :; do
 	    ;;
 	-v|--volume)
 	    if [[ $2 ]]; then
-		volume+=("$2")
+		volume=("$2")
 		shift
 	    else
 		missing "volume" $1
@@ -42,7 +42,7 @@ while :; do
 	    ;;
 	-s|--size)
 	    if [[ $2 ]]; then
-		size+=("$2")
+		size=("$2")
 		shift
 	    else
 		missing "size" $1
@@ -50,7 +50,7 @@ while :; do
 	    ;;
 	-f|--frontend)
 	    if [[ $2 ]]; then
-		frontend+=("$2")
+		frontend=("$2")
 		shift
 	    else
 		missing "frontend" $1
@@ -58,7 +58,7 @@ while :; do
 	    ;;
 	-p|--data-server-protocol)
 	    if [[ $2 ]]; then
-		data_server_protocol+=("$2")
+		data_server_protocol=("$2")
 		shift
 	    else
 		missing "data-server-protocol" $1
@@ -66,7 +66,7 @@ while :; do
 	    ;;
 	-q|--queue-depth)
 	    if [[ $2 ]]; then
-		queue_depth+=("$2")
+		queue_depth=("$2")
 		shift
 	    else
 		missing "queue-depth" $1
