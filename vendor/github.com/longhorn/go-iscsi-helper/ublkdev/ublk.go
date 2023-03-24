@@ -14,12 +14,14 @@ type Device struct {
 	KernelDevice *util.KernelDevice
 	BackingFile  string
 	Size         int64
+	QueueDepth   int
 }
 
-func NewDevice(backingFile string, size int64) (*Device, error) {
+func NewDevice(backingFile string, size int64, queueDepth int) (*Device, error) {
 	return &Device{
 		BackingFile: backingFile,
 		Size:        size,
+		QueueDepth:  queueDepth,
 	}, nil
 }
 
@@ -29,7 +31,7 @@ func (dev *Device) CreateDisk() error {
 		return err
 	}
 
-	devId, err := ublk.StartDaemon(dev.BackingFile, dev.Size, ne)
+	devId, err := ublk.StartDaemon(dev.BackingFile, dev.Size, dev.QueueDepth, ne)
 	if err != nil {
 		return err
 	}

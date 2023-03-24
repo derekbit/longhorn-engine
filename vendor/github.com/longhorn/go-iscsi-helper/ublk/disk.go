@@ -31,7 +31,7 @@ func parseDeviceId(str string) (int, error) {
 }
 
 // StartDaemon will start ublk server daemon, prepare for further commands
-func StartDaemon(backingFile string, size int64, ne *util.NamespaceExecutor) (int, error) {
+func StartDaemon(backingFile string, size int64, queueDepth int, ne *util.NamespaceExecutor) (int, error) {
 	opts := []string{
 		"add",
 		"-t",
@@ -41,7 +41,7 @@ func StartDaemon(backingFile string, size int64, ne *util.NamespaceExecutor) (in
 		"-s",
 		strconv.FormatInt(size, 10),
 		"-d",
-		"31",
+		strconv.Itoa(queueDepth),
 		"-q",
 		"1",
 	}

@@ -6,6 +6,7 @@ mount --rbind /host/dev /dev
 
 frontend="tgt-blockdev"
 data_server_protocol="tcp"
+queue_depth="31"
 
 show_help() {
     cat << EOF
@@ -16,6 +17,7 @@ Options:
   -s, --size <size>		                    Volume size.
   -f, --frontend <tgt-blockdev|ublk>	    Frontend type.
   -p, --data-server-protocol <tcp|unix>     Data server protocol.
+  -q, --queue-depth <depth>                 Queue depth for ublk frontend.
 EOF
 }
 
@@ -54,12 +56,20 @@ while :; do
 		missing "frontend" $1
 	    fi
 	    ;;
-	-p|--data_server_protocol)
+	-p|--data-server-protocol)
 	    if [[ $2 ]]; then
 		data_server_protocol+=("$2")
 		shift
 	    else
 		missing "data-server-protocol" $1
+	    fi
+	    ;;
+	-q|--queue-depth)
+	    if [[ $2 ]]; then
+		queue_depth+=("$2")
+		shift
+	    else
+		missing "queue-depth" $1
 	    fi
 	    ;;
 	--) shift; break ;;
@@ -87,7 +97,9 @@ function start_grpc_health_probe() {
 }
 
 function start_tgtd() {
-    tgtd -f 2>&1 | tee /var/log/tgtd.log &
+    if [ "$frontend" != "ublk" ]; then
+        tgtd -f 2>&1 | tee /var/log/tgtd.log &
+    fi
 }
 
 function start_replica_process() {
@@ -99,13 +111,24 @@ function start_replica_process() {
 }
 
 function start_engine_process() {
-    longhorn-instance-manager process create --name "$volume-e" --binary /usr/local/bin/longhorn --port-count 1 --port-args "--listen,localhost:" -- \
-        controller $volume \
-            --frontend $frontend \
-            --size $size \
-            --current-size $size \
-            --replica tcp://localhost:10000 \
-            --data-server-protocol $data_server_protocol
+    if [ "$frontend" == "ublk" ]; then
+        longhorn-instance-manager process create --name "$volume-e" --binary /usr/local/bin/longhorn --port-count 1 --port-args "--listen,localhost:" -- \
+            controller $volume \
+                --frontend $frontend \
+                --size $size \
+                --current-size $size \
+                --replica tcp://localhost:10000 \
+                --data-server-protocol $data_server_protocol \
+                --queue-depth $queue_depth
+    else
+        longhorn-instance-manager process create --name "$volume-e" --binary /usr/local/bin/longhorn --port-count 1 --port-args "--listen,localhost:" -- \
+            controller $volume \
+                --frontend $frontend \
+                --size $size \
+                --current-size $size \
+                --replica tcp://localhost:10000 \
+                --data-server-protocol $data_server_protocol
+    fi
 }
 
 function main() {

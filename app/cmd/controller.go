@@ -67,6 +67,12 @@ func ControllerCmd() cli.Command {
 				Value:  int64(controller.DefaultEngineReplicaTimeout.Seconds()),
 				Usage:  "In seconds. Timeout between engine and replica(s)",
 			},
+			cli.IntFlag{
+				Name:   "queue-depth",
+				Hidden: false,
+				Value:  31,
+				Usage:  "Queue depth for ublk frontend",
+			},
 			cli.StringFlag{
 				Name:  "data-server-protocol",
 				Value: "tcp",
@@ -136,6 +142,8 @@ func startController(c *cli.Context) error {
 	engineReplicaTimeout = controller.DetermineEngineReplicaTimeout(engineReplicaTimeout)
 	iscsiTargetRequestTimeout := controller.DetermineIscsiTargetRequestTimeout(engineReplicaTimeout)
 
+	queueDepth := c.Int("queue-depth")
+
 	factories := map[string]types.BackendFactory{}
 	for _, backend := range backends {
 		switch backend {
@@ -150,7 +158,7 @@ func startController(c *cli.Context) error {
 
 	var frontend types.Frontend
 	if frontendName != "" {
-		f, err := controller.NewFrontend(frontendName, iscsiTargetRequestTimeout)
+		f, err := controller.NewFrontend(frontendName, iscsiTargetRequestTimeout, queueDepth)
 		if err != nil {
 			return errors.Wrapf(err, "failed to find frontend: %s", frontendName)
 		}
@@ -161,7 +169,7 @@ func startController(c *cli.Context) error {
 		name, iscsiTargetRequestTimeout, engineReplicaTimeout)
 	control := controller.NewController(name, dynamic.New(factories), frontend, isUpgrade, disableRevCounter, salvageRequested,
 		unmapMarkSnapChainRemoved, iscsiTargetRequestTimeout, engineReplicaTimeout, types.DataServerProtocol(dataServerProtocol),
-		fileSyncHTTPClientTimeout)
+		fileSyncHTTPClientTimeout, queueDepth)
 
 	// need to wait for Shutdown() completion
 	control.ShutdownWG.Add(1)

@@ -17,11 +17,12 @@ type Ublk struct {
 	isUp         bool
 	dev          longhorndev.DeviceService
 	frontendName string
+	queueDepth   int
 }
 
-func New(frontendName string) types.Frontend {
+func New(frontendName string, queueDepth int) types.Frontend {
 	s := socket.New()
-	return &Ublk{s, false, nil, frontendName}
+	return &Ublk{s, false, nil, frontendName, queueDepth}
 }
 
 func (t *Ublk) FrontendName() string {
@@ -39,7 +40,7 @@ func (t *Ublk) Init(name string, size, sectorSize int64) error {
 	var err error
 
 	logrus.Info("Initializing ublk device")
-	dev, err = ldc.NewUblkBlockDevice(name, size, t.frontendName)
+	dev, err = ldc.NewUblkBlockDevice(name, size, t.queueDepth, t.frontendName)
 	if err != nil {
 		return err
 	}

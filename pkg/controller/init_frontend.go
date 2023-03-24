@@ -22,7 +22,7 @@ const (
 	maxEngineReplicaTimeout     = 30 * time.Second
 )
 
-func NewFrontend(frontendType string, iscsiTargetRequestTimeout time.Duration) (types.Frontend, error) {
+func NewFrontend(frontendType string, iscsiTargetRequestTimeout time.Duration, defaultQueueDepth int) (types.Frontend, error) {
 	switch frontendType {
 	case "rest":
 		return rest.New(), nil
@@ -33,7 +33,7 @@ func NewFrontend(frontendType string, iscsiTargetRequestTimeout time.Duration) (
 	case devtypes.FrontendTGTISCSI:
 		return tgt.New(devtypes.FrontendTGTISCSI, defaultScsiTimeout, defaultIscsiAbortTimeout, iscsiTargetRequestTimeout), nil
 	case devtypes.FrontendUblk:
-		return ublk.New(devtypes.FrontendUblk), nil
+		return ublk.New(devtypes.FrontendUblk, defaultQueueDepth), nil
 	default:
 		return nil, fmt.Errorf("unsupported frontend type: %v", frontendType)
 	}

@@ -21,17 +21,21 @@ import (
 
 type Controller struct {
 	sync.RWMutex
-	Name                      string
-	size                      int64
-	sectorSize                int64
-	replicas                  []types.Replica
-	factory                   types.BackendFactory
-	backend                   *replicator
-	frontend                  types.Frontend
-	isUpgrade                 bool
+	Name       string
+	size       int64
+	sectorSize int64
+	replicas   []types.Replica
+	factory    types.BackendFactory
+	backend    *replicator
+	frontend   types.Frontend
+	isUpgrade  bool
+
 	iscsiTargetRequestTimeout time.Duration
-	engineReplicaTimeout      time.Duration
-	DataServerProtocol        types.DataServerProtocol
+
+	queueDepth int
+
+	engineReplicaTimeout time.Duration
+	DataServerProtocol   types.DataServerProtocol
 
 	isExpanding             bool
 	revisionCounterDisabled bool
@@ -65,7 +69,7 @@ const (
 )
 
 func NewController(name string, factory types.BackendFactory, frontend types.Frontend, isUpgrade, disableRevCounter, salvageRequested, unmapMarkSnapChainRemoved bool,
-	iscsiTargetRequestTimeout, engineReplicaTimeout time.Duration, dataServerProtocol types.DataServerProtocol, fileSyncHTTPClientTimeout int) *Controller {
+	iscsiTargetRequestTimeout, engineReplicaTimeout time.Duration, dataServerProtocol types.DataServerProtocol, fileSyncHTTPClientTimeout, queueDepth int) *Controller {
 	c := &Controller{
 		factory:       factory,
 		Name:          name,
@@ -79,8 +83,10 @@ func NewController(name string, factory types.BackendFactory, frontend types.Fro
 		unmapMarkSnapChainRemoved: unmapMarkSnapChainRemoved,
 
 		iscsiTargetRequestTimeout: iscsiTargetRequestTimeout,
-		engineReplicaTimeout:      engineReplicaTimeout,
-		DataServerProtocol:        dataServerProtocol,
+		queueDepth:                queueDepth,
+
+		engineReplicaTimeout: engineReplicaTimeout,
+		DataServerProtocol:   dataServerProtocol,
 
 		fileSyncHTTPClientTimeout: fileSyncHTTPClientTimeout,
 	}
@@ -482,7 +488,7 @@ func (c *Controller) StartFrontend(frontend string) error {
 		}
 	}
 
-	f, err := NewFrontend(frontend, c.iscsiTargetRequestTimeout)
+	f, err := NewFrontend(frontend, c.iscsiTargetRequestTimeout, c.queueDepth)
 	if err != nil {
 		return errors.Wrapf(err, "failed to find frontend: %s", frontend)
 	}

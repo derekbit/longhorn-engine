@@ -17,22 +17,24 @@ import (
 
 type LonghornUblkDevice struct {
 	*sync.RWMutex
-	name     string //VolumeName
-	size     int64
-	frontend string
-	endpoint string
+	name       string //VolumeName
+	size       int64
+	queueDepth int
+	frontend   string
+	endpoint   string
 
 	ublkDevice *ublkdev.Device
 }
 
-func (ldc *LonghornDeviceCreator) NewUblkBlockDevice(name string, size int64, frontend string) (DeviceService, error) {
+func (ldc *LonghornDeviceCreator) NewUblkBlockDevice(name string, size int64, queueDepth int, frontend string) (DeviceService, error) {
 	if name == "" || size == 0 {
 		return nil, fmt.Errorf("invalid parameter for creating Longhorn device")
 	}
 	dev := &LonghornUblkDevice{
-		RWMutex: &sync.RWMutex{},
-		name:    name,
-		size:    size,
+		RWMutex:    &sync.RWMutex{},
+		name:       name,
+		size:       size,
+		queueDepth: queueDepth,
 	}
 	if err := dev.SetFrontend(frontend); err != nil {
 		return nil, err
@@ -58,7 +60,7 @@ func (d *LonghornUblkDevice) InitDevice() error {
 
 // call with lock hold
 func (d *LonghornUblkDevice) initUblkDevice() error {
-	dev, err := ublkdev.NewDevice(d.GetSocketPath(), d.size)
+	dev, err := ublkdev.NewDevice(d.GetSocketPath(), d.size, d.queueDepth)
 	if err != nil {
 		return err
 	}
