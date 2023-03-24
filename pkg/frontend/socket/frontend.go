@@ -17,7 +17,7 @@ import (
 const (
 	frontendName = "socket"
 
-	SocketDirectory = "/var/run/longhorn"
+	SocketDirectory = "/var/run/longhorn/"
 	DevPath         = "/dev/longhorn/"
 )
 

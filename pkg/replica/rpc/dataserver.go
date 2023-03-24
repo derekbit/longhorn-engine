@@ -50,7 +50,7 @@ func (s *DataServer) listenAndServeTCP() error {
 	for {
 		conn, err := l.AcceptTCP()
 		if err != nil {
-			logrus.WithError(err).Error("failed to accept tcp connection")
+			logrus.WithError(err).Error("Failed to accept tcp connection")
 			continue
 		}
 
@@ -77,7 +77,7 @@ func (s *DataServer) listenAndServeUNIX() error {
 	for {
 		conn, err := l.AcceptUnix()
 		if err != nil {
-			logrus.WithError(err).Error("failed to accept unix-domain-socket connection")
+			logrus.WithError(err).Error("Failed to accept unix-domain-socket connection")
 			continue
 		}
 		logrus.Infof("New connection from: %v", conn.RemoteAddr())

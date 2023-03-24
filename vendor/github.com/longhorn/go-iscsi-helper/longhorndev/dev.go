@@ -3,7 +3,7 @@ package longhorndev
 import "time"
 
 const (
-	SocketDirectory = "/var/run/longhorn"
+	SocketDirectory = "/var/run/longhorn/"
 	DevPath         = "/dev/longhorn/"
 
 	WaitInterval = time.Second
