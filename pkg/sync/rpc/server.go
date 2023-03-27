@@ -703,19 +703,26 @@ func (s *SyncAgentServer) BackupCreate(ctx context.Context, req *ptypes.BackupCr
 		}
 	}
 
-	backupID, replicaObj, err := backup.DoBackupCreate(req.BackupName, req.VolumeName, req.SnapshotFileName, req.BackupTarget, req.BackingImageName, req.BackingImageChecksum, req.Labels)
+	replicaBackup, backupConfig, err := backup.BackupInit(req.BackupName, req.VolumeName,
+		req.SnapshotFileName, req.BackupTarget, req.BackingImageName, req.BackingImageChecksum, req.Labels)
+	if err != nil {
+		logrus.Errorf("Error initializing backup: %v", err)
+		return nil, err
+	}
+
+	if err := s.BackupList.BackupAdd(replicaBackup.Name, replicaBackup); err != nil {
+		return nil, fmt.Errorf("failed to add the backup object: %v", err)
+	}
+
+	err = backup.DoBackupCreate(replicaBackup, backupConfig)
 	if err != nil {
 		logrus.Errorf("Error creating backup: %v", err)
 		return nil, err
 	}
 
 	resp := &ptypes.BackupCreateResponse{
-		Backup:        backupID,
-		IsIncremental: replicaObj.IsIncremental,
-	}
-
-	if err := s.BackupList.BackupAdd(backupID, replicaObj); err != nil {
-		return nil, fmt.Errorf("failed to add the backup object: %v", err)
+		Backup:        replicaBackup.Name,
+		IsIncremental: replicaBackup.IsIncremental,
 	}
 
 	logrus.Infof("Done initiating backup creation, received backupID: %v", resp.Backup)
@@ -732,9 +739,20 @@ func (s *SyncAgentServer) BackupStatus(ctx context.Context, req *ptypes.BackupSt
 		return nil, err
 	}
 
-	snapshotName, err := replica.GetSnapshotNameFromDiskName(replicaObj.SnapshotID)
-	if err != nil {
-		return nil, errors.Wrap(err, "couldn't get snapshot name")
+	snapshotName := ""
+	switch replicaObj.State {
+	case replica.ProgressStateError:
+		fallthrough
+	case replica.ProgressStateStarting:
+		if replicaObj.SnapshotID == "" {
+			break
+		}
+		fallthrough
+	default:
+		snapshotName, err = replica.GetSnapshotNameFromDiskName(replicaObj.SnapshotID)
+		if err != nil {
+			return nil, errors.Wrap(err, "couldn't get snapshot name")
+		}
 	}
 
 	resp := &ptypes.BackupStatusResponse{
@@ -748,7 +766,7 @@ func (s *SyncAgentServer) BackupStatus(ctx context.Context, req *ptypes.BackupSt
 }
 
 func (*SyncAgentServer) BackupRemove(ctx context.Context, req *ptypes.BackupRemoveRequest) (*empty.Empty, error) {
-	cmd := reexec.Command("sbackup", "delete", req.Backup)
+	cmd := reexec.Command("backup", "delete", req.Backup)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL,
 	}
@@ -760,11 +778,11 @@ func (*SyncAgentServer) BackupRemove(ctx context.Context, req *ptypes.BackupRemo
 
 	logrus.Infof("Running %s %v", cmd.Path, cmd.Args)
 	if err := cmd.Wait(); err != nil {
-		logrus.Infof("Error running %s %v: %v", "sbackup", cmd.Args, err)
+		logrus.Infof("Error running %s %v: %v", "backup", cmd.Args, err)
 		return nil, err
 	}
 
-	logrus.Infof("Done running %s %v", "sbackup", cmd.Args)
+	logrus.Infof("Done running %s %v", "backup", cmd.Args)
 	return &empty.Empty{}, nil
 }
 

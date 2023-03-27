@@ -18,6 +18,7 @@ type ProgressState string
 const (
 	snapBlockSize = 2 << 20 // 2MiB
 
+	ProgressStateStarting   = ProgressState("starting")
 	ProgressStateInProgress = ProgressState("in_progress")
 	ProgressStateComplete   = ProgressState("complete")
 	ProgressStateError      = ProgressState("error")
@@ -107,9 +108,10 @@ func (status *RestoreStatus) FinishRestore() {
 
 // Revert is used for reverting the current restore status to the previous status.
 // This function will be invoked when:
-//     1. The new restore is failed before the actual restore is performed.
-//     2. The existing files are not modified.
-//     3. The current status has been updated/initialized for the new restore.
+//  1. The new restore is failed before the actual restore is performed.
+//  2. The existing files are not modified.
+//  3. The current status has been updated/initialized for the new restore.
+//
 // If there is no modification applied on the existing replica disk files after the restore failure,
 // it means the replica is still available. In order to make sure the replica work fine
 // for the next restore and the status is not messed up, the revert is indispensable.
@@ -144,6 +146,7 @@ func (status *RestoreStatus) DeepCopy() *RestoreStatus {
 
 type BackupStatus struct {
 	lock          sync.Mutex
+	Name          string
 	backingFile   *backingfile.BackingFile
 	replica       *Replica
 	volumeID      string
@@ -155,25 +158,26 @@ type BackupStatus struct {
 	IsIncremental bool
 }
 
-func NewBackup(backingFile *backingfile.BackingFile) *BackupStatus {
+func NewBackup(name string, backingFile *backingfile.BackingFile) *BackupStatus {
 	return &BackupStatus{
+		Name:        name,
 		backingFile: backingFile,
-		State:       ProgressStateInProgress,
+		State:       ProgressStateStarting,
 	}
 }
 
-func (rb *BackupStatus) UpdateBackupStatus(snapID, volumeID string, progress int, url string, errString string) error {
+func (rb *BackupStatus) UpdateBackupStatus(snapID, volumeID string, state string, progress int, url string, errString string) error {
 	id := GenerateSnapshotDiskName(snapID)
 	rb.lock.Lock()
 	defer rb.lock.Unlock()
 	if err := rb.assertOpen(id, volumeID); err != nil {
-		logrus.Errorf("Returning Error from UpdateBackupProgress")
+		logrus.WithError(err).Error("Returning Error from UpdateBackupStatus")
 		return err
 	}
-
-	rb.Progress = progress
+	rb.State = ProgressState(state)
 	rb.BackupURL = url
 	rb.Error = errString
+	rb.Progress = progress
 
 	if rb.Progress == 100 {
 		rb.State = ProgressStateComplete
@@ -227,8 +231,15 @@ func (rb *BackupStatus) OpenSnapshot(snapID, volumeID string) error {
 }
 
 func (rb *BackupStatus) assertOpen(id, volumeID string) error {
-	if rb.volumeID != volumeID || rb.SnapshotID != id {
-		return fmt.Errorf("invalid state volume [%s] and snapshot [%s] are open, not volume [%s], snapshot [%s]", rb.volumeID, rb.SnapshotID, volumeID, id)
+	if rb.volumeID != "" {
+		if rb.volumeID != volumeID {
+			return fmt.Errorf("invalid state volume [%s] is open, not volume [%s]", rb.volumeID, id)
+		}
+	}
+	if rb.SnapshotID != "" {
+		if rb.SnapshotID != id {
+			return fmt.Errorf("invalid state snapshot [%s] is open, not snapshot [%s]", rb.SnapshotID, id)
+		}
 	}
 	return nil
 }

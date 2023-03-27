@@ -331,3 +331,11 @@ func GetInitiatorNS() string {
 func GetFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
+
+func GenerateName(prefix string) string {
+	suffix := strings.Replace(NewUUID(), "-", "", -1)
+	return prefix + "-" + suffix[:16]
+}
+func NewUUID() string {
+	return uuid.New().String()
+}

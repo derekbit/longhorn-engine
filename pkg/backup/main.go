@@ -56,8 +56,8 @@ func RequiredMissingError(name string) error {
 	return fmt.Errorf("cannot find valid required parameter: %v", name)
 }
 
-func DoBackupCreate(backupName, volumeName, snapshotName, destURL, backingImageName, backingImageChecksum string,
-	labels []string) (string, *replica.BackupStatus, error) {
+func BackupInit(backupName, volumeName, snapshotName, destURL, backingImageName, backingImageChecksum string,
+	labels []string) (*replica.BackupStatus, *backupstore.DeltaBackupConfig, error) {
 	var (
 		err         error
 		backingFile *backingfile.BackingFile
@@ -65,41 +65,40 @@ func DoBackupCreate(backupName, volumeName, snapshotName, destURL, backingImageN
 	)
 
 	if volumeName == "" || snapshotName == "" || destURL == "" {
-		return "", nil, fmt.Errorf("missing input parameter")
+		return nil, nil, fmt.Errorf("missing input parameter")
 	}
 
 	if !util.ValidVolumeName(volumeName) {
-		return "", nil, fmt.Errorf("invalid volume name %v for backup", volumeName)
+		return nil, nil, fmt.Errorf("invalid volume name %v for backup", volumeName)
 	}
 
 	if labels != nil {
 		labelMap, err = util.ParseLabels(labels)
 		if err != nil {
-			return "", nil, fmt.Errorf("cannot parse backup labels")
+			return nil, nil, fmt.Errorf("cannot parse backup labels")
 		}
 	}
 
 	dir, err := os.Getwd()
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	volumeInfo, err := replica.ReadInfo(dir)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 	if volumeInfo.BackingFilePath != "" {
 		backingFilePath := volumeInfo.BackingFilePath
 		if _, err := os.Stat(backingFilePath); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 
 		backingFile, err = backingfile.OpenBackingFile(backingFilePath)
 		if err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
-	replicaBackup := replica.NewBackup(backingFile)
 
 	volume := &backupstore.Volume{
 		Name:                 volumeName,
@@ -109,14 +108,21 @@ func DoBackupCreate(backupName, volumeName, snapshotName, destURL, backingImageN
 		BackingImageChecksum: backingImageChecksum,
 		CreatedTime:          util.Now(),
 	}
+
 	snapshot := &backupstore.Snapshot{
 		Name:        snapshotName,
 		CreatedTime: util.Now(),
 	}
 
-	log.Debugf("Starting backup for %v, snapshot %v, dest %v", volume, snapshot, destURL)
+	originalBackupName := backupName
+	if backupName == "" {
+		backupName = util.GenerateName("backup")
+	}
+
+	replicaBackup := replica.NewBackup(backupName, backingFile)
+
 	config := &backupstore.DeltaBackupConfig{
-		BackupName: backupName,
+		BackupName: originalBackupName,
 		Volume:     volume,
 		Snapshot:   snapshot,
 		DestURL:    destURL,
@@ -124,12 +130,16 @@ func DoBackupCreate(backupName, volumeName, snapshotName, destURL, backingImageN
 		Labels:     labelMap,
 	}
 
-	backupID, isIncremental, err := backupstore.CreateDeltaBlockBackup(config)
+	return replicaBackup, config, nil
+}
+
+func DoBackupCreate(replicaBackup *replica.BackupStatus, config *backupstore.DeltaBackupConfig) error {
+	isIncremental, err := backupstore.CreateDeltaBlockBackup(replicaBackup.Name, config)
 	if err != nil {
-		return "", nil, err
+		return err
 	}
 	replicaBackup.IsIncremental = isIncremental
-	return backupID, replicaBackup, nil
+	return nil
 }
 
 func DoBackupRestore(backupURL string, toFile string, restoreObj *replica.RestoreStatus) error {
