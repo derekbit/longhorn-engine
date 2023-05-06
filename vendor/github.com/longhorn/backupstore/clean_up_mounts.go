@@ -7,7 +7,7 @@ import (
 	mount "k8s.io/mount-utils"
 )
 
-func CleanUpAllMounts() (err error) {
+func CleanUpMounts(inUseBackupTargets []string) (err error) {
 	mounter := mount.New("")
 
 	if _, err := os.Stat(util.MountDir); err != nil {
@@ -17,6 +17,5 @@ func CleanUpAllMounts() (err error) {
 		return err
 	}
 
-	err = util.CleanUpMountPoints(mounter, log)
-	return err
+	return util.CleanUpMountPoints(mounter, inUseBackupTargets, log)
 }

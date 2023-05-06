@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -278,7 +279,7 @@ func IsMounted(mountPoint string) bool {
 	return false
 }
 
-func cleanupMount(mountDir string, mounter mount.Interface, log logrus.FieldLogger) error {
+func cleanUpMount(mountDir string, mounter mount.Interface, log logrus.FieldLogger) error {
 	forceUnmounter, ok := mounter.(mount.MounterForceUnmounter)
 	if ok {
 		log.Infof("Trying to force clean up mount point %v", mountDir)
@@ -315,7 +316,7 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 
 	if IsCorruptedMnt {
 		log.Warnf("Failed to check mount point %v (mounted=%v)", mountPoint, mounted)
-		if mntErr := cleanupMount(mountPoint, mounter, log); mntErr != nil {
+		if mntErr := cleanUpMount(mountPoint, mounter, log); mntErr != nil {
 			return true, errors.Wrapf(mntErr, "failed to clean up corrupted mount point %v", mountPoint)
 		}
 		notMounted = true
@@ -342,7 +343,7 @@ func EnsureMountPoint(Kind, mountPoint string, mounter mount.Interface, log logr
 
 	log.Warnf("Cleaning up the mount point %v because the fstype %v is changed to %v", mountPoint, kind, Kind)
 
-	if mntErr := cleanupMount(mountPoint, mounter, log); mntErr != nil {
+	if mntErr := cleanUpMount(mountPoint, mounter, log); mntErr != nil {
 		return true, errors.Wrapf(mntErr, "failed to clean up mount point %v (%v) for %v protocol", kind, mountPoint, Kind)
 	}
 
@@ -364,36 +365,70 @@ func MountWithTimeout(mounter mount.Interface, source string, target string, fst
 	return err
 }
 
+func GetMountDirFromBackupTarget(backupTarget string) (string, error) {
+	u, err := url.Parse(backupTarget)
+	if err != nil {
+		return "", err
+	}
+
+	mountDir := filepath.Join(MountDir, strings.TrimRight(strings.Replace(u.Host, ".", "_", -1), ":"), u.Path)
+	return mountDir, nil
+}
+
 // CleanUpMountPoints tries to clean up all existing mount points for existing backup stores
-func CleanUpMountPoints(mounter mount.Interface, log logrus.FieldLogger) error {
+func CleanUpMountPoints(mounter mount.Interface, inUseBackupTargets []string, log logrus.FieldLogger) error {
 	var errs error
 
-	filepath.Walk(MountDir, func(path string, info os.FileInfo, err error) error {
+	inUseMountDirs := make(map[string]struct{})
+	for _, backupTarget := range inUseBackupTargets {
+		mountDir, err := GetMountDirFromBackupTarget(backupTarget)
 		if err != nil {
-			errs = multierr.Append(errs, errors.Wrapf(err, "failed to get file info of %v", path))
-			return nil
+			log.WithError(err).Warnf("Failed to get mount dir for backup target %v", backupTarget)
+			continue
 		}
 
-		if !info.IsDir() {
-			return nil
+		inUseMountDirs[mountDir] = struct{}{}
+	}
+
+	dir, err := os.Open(MountDir)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer dir.Close()
+
+	fileInfo, err := dir.ReadDir(0)
+	if err != nil {
+		log.WithError(err).Warnf("Failed to read dir %v", MountDir)
+		return err
+	}
+
+	for _, file := range fileInfo {
+		path := filepath.Join(MountDir, file.Name())
+
+		logrus.Infof("Debug ===> path=%+v", path)
+
+		if !file.IsDir() {
+			continue
+		}
+
+		if _, ok := inUseMountDirs[path]; ok {
+			continue
 		}
 
 		notMounted, err := mount.IsNotMountPoint(mounter, path)
 		if err != nil {
 			errs = multierr.Append(errs, errors.Wrapf(err, "failed to check if %s is not mounted", path))
-			return nil
+			continue
 		}
 
 		if notMounted {
-			return nil
+			continue
 		}
 
-		if err := cleanupMount(path, mounter, log); err != nil {
+		if err := cleanUpMount(path, mounter, log); err != nil {
 			errs = multierr.Append(errs, errors.Wrapf(err, "failed to clean up mount point %v", path))
 		}
-
-		return nil
-	})
+	}
 
 	return errs
 }
