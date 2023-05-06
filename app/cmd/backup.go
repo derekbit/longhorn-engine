@@ -27,7 +27,7 @@ func BackupCmd() cli.Command {
 			BackupRestoreCmd(),
 			RestoreToFileCmd(),
 			RestoreStatusCmd(),
-			cmd.BackupCleanupAllMountsCmd(),
+			cmd.BackupCleanUpMountsCmd(),
 			cmd.BackupRemoveCmd(),
 			cmd.BackupListCmd(),
 			cmd.InspectVolumeCmd(),
