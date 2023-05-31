@@ -44,6 +44,8 @@ message Volume {
     string last_expansion_failed_at = 9;
 
     bool unmap_mark_snap_chain_removed = 10;
+
+    int32 port = 11;
 }
 
 message ReplicaAddress {
