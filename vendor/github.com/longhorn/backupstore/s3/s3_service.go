@@ -1,8 +1,10 @@
 package s3
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -149,7 +151,7 @@ func (s *Service) PutObject(key string, reader io.ReadSeeker) error {
 	return nil
 }
 
-func (s *Service) GetObject(key string) (io.ReadCloser, error) {
+func (s *Service) GetObject(key string) (io.ReadSeeker, error) {
 	svc, err := s.New()
 	if err != nil {
 		return nil, err
@@ -167,7 +169,14 @@ func (s *Service) GetObject(key string) (io.ReadCloser, error) {
 			key, resp.String(), parseAwsError(err))
 	}
 
-	return resp.Body, nil
+	defer resp.Body.Close() // Ensure proper closing
+
+	data, err := ioutil.ReadAll(resp.Body) // Read entire object
+	if err != nil {
+		return nil, fmt.Errorf("failed to read object body: %v", err)
+	}
+
+	return bytes.NewReader(data), nil
 }
 
 func (s *Service) DeleteObjects(key string) error {

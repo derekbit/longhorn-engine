@@ -180,11 +180,21 @@ func (s *BackupStoreDriver) Remove(path string) error {
 
 func (s *BackupStoreDriver) Read(src string) (io.ReadCloser, error) {
 	path := s.updatePath(src)
-	rc, err := s.service.GetObject(path)
+	rs, err := s.service.GetObject(path)
 	if err != nil {
 		return nil, err
 	}
-	return rc, nil
+
+	return readSeekerCloser{rs}, nil
+
+}
+
+type readSeekerCloser struct {
+	io.ReadSeeker
+}
+
+func (rsc readSeekerCloser) Close() error {
+	return nil
 }
 
 func (s *BackupStoreDriver) Write(dst string, rs io.ReadSeeker) error {
@@ -222,7 +232,6 @@ func (s *BackupStoreDriver) Download(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
 
 	_, err = io.Copy(f, rc)
 	return err
