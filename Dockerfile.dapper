@@ -22,6 +22,9 @@ WORKDIR ${DAPPER_SOURCE}
 ENTRYPOINT ["./scripts/entry"]
 CMD ["ci"]
 
+RUN zypper -n ref && \
+    zypper update -y
+
 RUN zypper -n addrepo --refresh https://download.opensuse.org/repositories/system:/snappy/SLE_15/system:snappy.repo && \
     zypper --gpg-auto-import-keys ref
 
