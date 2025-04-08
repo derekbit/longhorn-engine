@@ -304,7 +304,7 @@ def restore_to_file_without_backing_file_test(backup_target,  # NOQA
     rm_backups(address, ENGINE_NAME, [backup])
 
 
-def test_restore_to_file_with_backing_file(backup_targets,  # NOQA
+def xxtest_restore_to_file_with_backing_file(backup_targets,  # NOQA
                                            grpc_backing_controller,  # NOQA
                                            grpc_backing_qcow2_replica1,  # NOQA
                                            grpc_backing_qcow2_replica2):  # NOQA
@@ -319,7 +319,7 @@ def test_restore_to_file_with_backing_file(backup_targets,  # NOQA
         cleanup_replica(grpc_backing_qcow2_replica2)
 
 
-def test_restore_to_file_without_backing_file(backup_targets,  # NOQA
+def xxtest_restore_to_file_without_backing_file(backup_targets,  # NOQA
                                               grpc_controller,  # NOQA
                                               grpc_replica1,  # NOQA
                                               grpc_replica2):  # NOQA

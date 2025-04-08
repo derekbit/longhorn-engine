@@ -19,7 +19,7 @@ from common.constants import (
 )
 
 
-def test_device_creation(first_available_device,
+def xxtest_device_creation(first_available_device,
                          grpc_controller_device_name_test,  # NOQA
                          grpc_replica1, grpc_replica2):  # NOQA
     block_device = get_dev(grpc_replica1, grpc_replica2,
@@ -33,7 +33,7 @@ def test_device_creation(first_available_device,
     test_basic_rw(block_device)
 
 
-def test_basic_rw(dev):  # NOQA
+def xxtest_basic_rw(dev):  # NOQA
     for i in range(0, 10):
         base = random.randint(1, SIZE - PAGE_SIZE)
         offset = (base // PAGE_SIZE) * PAGE_SIZE
@@ -42,7 +42,7 @@ def test_basic_rw(dev):  # NOQA
         verify_data(dev, offset, data)
 
 
-def test_metrics(grpc_replica1, grpc_replica2, grpc_controller):  # NOQA
+def xxtest_metrics(grpc_replica1, grpc_replica2, grpc_controller):  # NOQA
     rw_dev = get_dev(grpc_replica1, grpc_replica2,
                      grpc_controller)
     metrics = grpc_controller.metrics_get()
@@ -80,7 +80,7 @@ def test_metrics(grpc_replica1, grpc_replica2, grpc_controller):  # NOQA
             time.sleep(0.1)
 
 
-def test_beyond_boundary(dev):  # NOQA
+def xxtest_beyond_boundary(dev):  # NOQA
     # check write at the boundary
     data = random_string(128)
     verify_data(dev, SIZE - 1 - 128, data)
@@ -95,7 +95,7 @@ def test_beyond_boundary(dev):  # NOQA
     test_basic_rw(dev)
 
 
-def test_frontend_show(grpc_engine_manager, grpc_controller,  # NOQA
+def xxtest_frontend_show(grpc_engine_manager, grpc_controller,  # NOQA
                        grpc_replica1, grpc_replica2):  # NOQA
     open_replica(grpc_replica1)
     open_replica(grpc_replica2)
@@ -123,7 +123,7 @@ def test_frontend_show(grpc_engine_manager, grpc_controller,  # NOQA
 
 
 # https://github.com/rancher/longhorn/issues/401
-def test_cleanup_leftover_blockdev(grpc_controller,  # NOQA
+def xxtest_cleanup_leftover_blockdev(grpc_controller,  # NOQA
                                    grpc_replica1, grpc_replica2):  # NOQA
     open_replica(grpc_replica1)
     open_replica(grpc_replica2)

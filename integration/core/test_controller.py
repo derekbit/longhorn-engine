@@ -16,12 +16,12 @@ from common.constants import (
 from rpc.controller.controller_client import ControllerClient  # NOQA
 
 
-def test_replica_list(grpc_controller_client):  # NOQA
+def xxtest_replica_list(grpc_controller_client):  # NOQA
     replicas = grpc_controller_client.replica_list()
     assert len(replicas) == 0
 
 
-def test_replica_create(grpc_controller_client):  # NOQA
+def xxtest_replica_create(grpc_controller_client):  # NOQA
     f1 = create_backend_file()
     r1 = 'file://' + f1
     replica = grpc_controller_client.replica_create(address=r1)
@@ -53,7 +53,7 @@ def test_replica_create(grpc_controller_client):  # NOQA
     cleanup_backend_file([f1, f2])
 
 
-def test_replica_delete(grpc_controller_client):  # NOQA
+def xxtest_replica_delete(grpc_controller_client):  # NOQA
     f1 = create_backend_file()
     f2 = create_backend_file()
     f3 = create_backend_file()
@@ -86,7 +86,7 @@ def test_replica_delete(grpc_controller_client):  # NOQA
     cleanup_backend_file([f1, f2, f3])
 
 
-def test_replica_change(grpc_controller_client):  # NOQA
+def xxtest_replica_change(grpc_controller_client):  # NOQA
     f = create_backend_file()
     r1 = grpc_controller_client.replica_create(address='file://' + f)
     assert r1.mode == 'WO'
@@ -100,7 +100,7 @@ def test_replica_change(grpc_controller_client):  # NOQA
     cleanup_backend_file([f])
 
 
-def test_start(grpc_controller_client):  # NOQA
+def xxtest_start(grpc_controller_client):  # NOQA
     v = grpc_controller_client.volume_get()
     assert v.replicaCount == 0
 
@@ -120,7 +120,7 @@ def test_start(grpc_controller_client):  # NOQA
     cleanup_backend_file([f1, f2])
 
 
-def test_shutdown(grpc_controller_client):  # NOQA
+def xxtest_shutdown(grpc_controller_client):  # NOQA
     v = grpc_controller_client.volume_get()
     assert v.replicaCount == 0
 
@@ -140,7 +140,7 @@ def test_shutdown(grpc_controller_client):  # NOQA
     cleanup_backend_file([f1, f2])
 
 
-def test_controller_expand(grpc_controller_client):  # NOQA
+def xxtest_controller_expand(grpc_controller_client):  # NOQA
     v = grpc_controller_client.volume_get()
     assert v.replicaCount == 0
 

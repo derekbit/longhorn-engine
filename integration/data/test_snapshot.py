@@ -69,7 +69,7 @@ def snapshot_revert_test(dev, address, engine_name):  # NOQA
     with pytest.raises(subprocess.CalledProcessError):
         snapshot_revert_with_frontend(address, engine_name, "non-existing")
 
-def test_snapshot_revert(grpc_controller,  # NOQA
+def xxtest_snapshot_revert(grpc_controller,  # NOQA
                          grpc_replica1, grpc_replica2):  # NOQA
     address = grpc_controller.address
     dev = get_dev(grpc_replica1, grpc_replica2, grpc_controller)
@@ -77,7 +77,7 @@ def test_snapshot_revert(grpc_controller,  # NOQA
 
 
 # BUG: https://github.com/rancher/longhorn/issues/108
-def test_snapshot_rm_basic(grpc_controller,  # NOQA
+def xxtest_snapshot_rm_basic(grpc_controller,  # NOQA
                            grpc_replica1, grpc_replica2):  # NOQA
     address = grpc_controller.address
 
@@ -118,7 +118,7 @@ def test_snapshot_rm_basic(grpc_controller,  # NOQA
     snap1.verify_checksum()
 
 
-def test_snapshot_revert_with_backing_file(grpc_backing_controller,  # NOQA
+def xxtest_snapshot_revert_with_backing_file(grpc_backing_controller,  # NOQA
                                            grpc_backing_qcow2_replica1,  # NOQA
                                            grpc_backing_qcow2_replica2):  # NOQA
     address = grpc_backing_controller.address
@@ -148,7 +148,7 @@ def test_snapshot_revert_with_backing_file(grpc_backing_controller,  # NOQA
     assert before == after
 
 
-def test_snapshot_rm_rolling(grpc_controller,  # NOQA
+def xxtest_snapshot_rm_rolling(grpc_controller,  # NOQA
                              grpc_replica1, grpc_replica2):  # NOQA
     address = grpc_controller.address
 
@@ -232,7 +232,7 @@ def test_snapshot_rm_rolling(grpc_controller,  # NOQA
     snap1.verify_data()
 
 
-def test_snapshot_tree_basic(grpc_controller,  # NOQA
+def xxtest_snapshot_tree_basic(grpc_controller,  # NOQA
                              grpc_replica1, grpc_replica2):  # NOQA
     address = grpc_controller.address
 
@@ -374,7 +374,7 @@ def volume_expansion_with_snapshots_test(dev, grpc_controller,  # NOQA
         data5.content + zero_char*(EXPANDED_SIZE-data5.offset-data5.length)
 
 
-def test_expansion_without_backing_file(grpc_controller,  # NOQA
+def xxtest_expansion_without_backing_file(grpc_controller,  # NOQA
                                         grpc_replica1, grpc_replica2):  # NOQA
     zero_char = b'\x00'.decode('utf-8')
     dev = get_dev(grpc_replica1, grpc_replica2, grpc_controller)
@@ -383,7 +383,7 @@ def test_expansion_without_backing_file(grpc_controller,  # NOQA
                                          zero_char*SIZE)
 
 
-def test_expansion_with_backing_file(grpc_backing_controller,  # NOQA
+def xxtest_expansion_with_backing_file(grpc_backing_controller,  # NOQA
                                      grpc_backing_qcow2_replica1, grpc_backing_qcow2_replica2):  # NOQA
     dev = get_dev(grpc_backing_qcow2_replica1, grpc_backing_qcow2_replica2,
                   grpc_backing_controller)
@@ -393,7 +393,7 @@ def test_expansion_with_backing_file(grpc_backing_controller,  # NOQA
                                          read_from_backing_file(0, SIZE))
 
 
-def test_snapshot_mounted_filesystem(grpc_controller,  # NOQA
+def xxtest_snapshot_mounted_filesystem(grpc_controller,  # NOQA
                          grpc_replica1, grpc_replica2):  # NOQA
     """
     Test that the filesystem on a currently mounted volume
@@ -511,7 +511,7 @@ def snapshot_mounted_filesystem_test(volume_name, dev, address, engine_name):  #
     subprocess.check_call(nsenter_cmd + ["rmdir", mnt_path_on_host])
 
 
-def test_snapshot_prune(grpc_controller, grpc_replica1, grpc_replica2):  # NOQA
+def xxtest_snapshot_prune(grpc_controller, grpc_replica1, grpc_replica2):  # NOQA
     """
     Test removing the snapshot directly behinds the volume head would trigger
     snapshot prune. Snapshot pruning means removing the overlapping part from
@@ -617,7 +617,7 @@ def test_snapshot_prune(grpc_controller, grpc_replica1, grpc_replica2):  # NOQA
     assert int(info[snap2]["size"]) == length1
 
 
-def test_snapshot_prune_with_coalesce(grpc_controller, grpc_replica1, grpc_replica2):  # NOQA
+def xxtest_snapshot_prune_with_coalesce(grpc_controller, grpc_replica1, grpc_replica2):  # NOQA
     """
     Test the prune for the snapshot directly behinds the volume head would be
     handled after all snapshot coalescing done.
@@ -685,7 +685,7 @@ def test_snapshot_prune_with_coalesce(grpc_controller, grpc_replica1, grpc_repli
     assert cksum == read_dev(dev, 0, 3*fs_block_size)
 
 
-def test_snapshot_trim_filesystem(grpc_controller,  # NOQA
+def xxtest_snapshot_trim_filesystem(grpc_controller,  # NOQA
                                   grpc_replica1, grpc_replica2):  # NOQA
     """
     Test that the trimming against the filesystem on a

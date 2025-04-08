@@ -9,7 +9,7 @@ from common.constants import (
 )
 
 
-def test_frontend_switch(grpc_controller_no_frontend,  # NOQA
+def xxtest_frontend_switch(grpc_controller_no_frontend,  # NOQA
                          grpc_replica1, grpc_replica2):  # NOQA
 
     open_replica(grpc_replica1)

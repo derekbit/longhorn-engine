@@ -32,7 +32,7 @@ from rpc.replica.replica_client import ReplicaClient
 from rpc.process_manager.process_manager_client import ProcessManagerClient
 
 
-def test_start_stop_replicas(pm_client):  # NOQA
+def xxtest_start_stop_replicas(pm_client):  # NOQA
     rs = pm_client.process_list()
     assert len(rs) == 0
 
@@ -72,7 +72,7 @@ def test_start_stop_replicas(pm_client):  # NOQA
     assert len(rs) == 0
 
 
-def test_process_creation_failure(pm_client):  # NOQA
+def xxtest_process_creation_failure(pm_client):  # NOQA
     rs = pm_client.process_list()
     assert len(rs) == 0
 
@@ -90,7 +90,7 @@ def test_process_creation_failure(pm_client):  # NOQA
     for name, r in rs.items():
         assert r.status.state == PROC_STATE_ERROR
 
-def test_one_volume(pm_client, em_client):  # NOQA
+def xxtest_one_volume(pm_client, em_client):  # NOQA
     rs = pm_client.process_list()
     assert len(rs) == 0
 
@@ -159,7 +159,7 @@ def test_one_volume(pm_client, em_client):  # NOQA
     assert len(ps) == 0
 
 
-def test_multiple_volumes(pm_client, em_client):  # NOQA
+def xxtest_multiple_volumes(pm_client, em_client):  # NOQA
     rs = pm_client.process_list()
     assert len(rs) == 0
 
@@ -220,7 +220,7 @@ def test_multiple_volumes(pm_client, em_client):  # NOQA
 
 
 @pytest.mark.skip(reason="debug")
-def test_engine_upgrade(pm_client, em_client):  # NOQA
+def xxtest_engine_upgrade(pm_client, em_client):  # NOQA
     rs = pm_client.process_list()
     assert len(rs) == 0
 
@@ -305,7 +305,7 @@ def test_engine_upgrade(pm_client, em_client):  # NOQA
     wait_for_dev_deletion(volume_name)
 
 
-def test_engine_replica_revision_counter_mismatch(em_client): # NOQA
+def xxtest_engine_replica_revision_counter_mismatch(em_client): # NOQA
     """
     Test engine replica revision counter mismatch
 

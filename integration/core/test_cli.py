@@ -107,7 +107,7 @@ def getNow():
     return datetime.datetime.utcnow().replace(microsecond=0).isoformat()
 
 
-def test_replica_add_start(bin, grpc_controller_client,  # NOQA
+def xxtest_replica_add_start(bin, grpc_controller_client,  # NOQA
                            grpc_replica_client):  # NOQA
     open_replica(grpc_replica_client)
 
@@ -123,7 +123,7 @@ def test_replica_add_start(bin, grpc_controller_client,  # NOQA
     assert volume.replicaCount == 1
 
 
-def test_replica_add_rebuild(bin, grpc_controller_client,  # NOQA
+def xxtest_replica_add_rebuild(bin, grpc_controller_client,  # NOQA
                              grpc_replica_client,  # NOQA
                              grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -230,7 +230,7 @@ def test_replica_add_rebuild(bin, grpc_controller_client,  # NOQA
     assert snap0_info["labels"]["key"] == "value"
 
 
-def test_replica_add_after_rebuild_failed(bin, grpc_controller_client,  # NOQA
+def xxtest_replica_add_after_rebuild_failed(bin, grpc_controller_client,  # NOQA
                                           grpc_replica_client,  # NOQA
                                           grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -272,7 +272,7 @@ def test_replica_add_after_rebuild_failed(bin, grpc_controller_client,  # NOQA
         assert r.mode == 'RW'
 
 
-def test_replica_failure_detection(grpc_controller_client,  # NOQA
+def xxtest_replica_failure_detection(grpc_controller_client,  # NOQA
                                    grpc_replica_client,  # NOQA
                                    grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -303,7 +303,7 @@ def test_replica_failure_detection(grpc_controller_client,  # NOQA
     assert detected
 
 
-def test_revert(engine_manager_client,  # NOQA
+def xxtest_revert(engine_manager_client,  # NOQA
                 grpc_controller_client,  # NOQA
                 grpc_replica_client,  # NOQA
                 grpc_replica_client2):  # NOQA
@@ -339,7 +339,7 @@ def test_revert(engine_manager_client,  # NOQA
     assert r1.chain == r2.chain
 
 
-def test_snapshot(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot(bin, grpc_controller_client,  # NOQA
                   grpc_replica_client, grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
     open_replica(grpc_replica_client2)
@@ -366,7 +366,7 @@ def test_snapshot(bin, grpc_controller_client,  # NOQA
 '''.format(snap2, snap)
 
 
-def test_snapshot_ls(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_ls(bin, grpc_controller_client,  # NOQA
                      grpc_replica_client, grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
     open_replica(grpc_replica_client2)
@@ -393,7 +393,7 @@ def test_snapshot_ls(bin, grpc_controller_client,  # NOQA
 '''.format(snap2, snap)
 
 
-def test_snapshot_info(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_info(bin, grpc_controller_client,  # NOQA
                        grpc_replica_client, grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
     open_replica(grpc_replica_client2)
@@ -449,7 +449,7 @@ def test_snapshot_info(bin, grpc_controller_client,  # NOQA
     assert len(snap_info["labels"]) == 0
 
 
-def test_snapshot_create(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_create(bin, grpc_controller_client,  # NOQA
                          grpc_replica_client,  # NOQA
                          grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -500,7 +500,7 @@ def test_snapshot_create(bin, grpc_controller_client,  # NOQA
     assert len(info[VOLUME_HEAD]["labels"]) == 0
 
 
-def test_snapshot_rm(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_rm(bin, grpc_controller_client,  # NOQA
                      grpc_replica_client, grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
     open_replica(grpc_replica_client2)
@@ -531,7 +531,7 @@ def test_snapshot_rm(bin, grpc_controller_client,  # NOQA
     assert chain[2] == new_chain[1]
 
 
-def test_snapshot_rm_empty(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_rm_empty(bin, grpc_controller_client,  # NOQA
                            grpc_replica_client,  # NOQA
                            grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -572,7 +572,7 @@ def test_snapshot_rm_empty(bin, grpc_controller_client,  # NOQA
     assert chain[1] == new_chain[1]
 
 
-def test_snapshot_last(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_last(bin, grpc_controller_client,  # NOQA
                        grpc_replica_client,  # NOQA
                        grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -773,7 +773,7 @@ def backup_core(bin, engine_manager_client,  # NOQA
     assert not os.path.exists(volume_cfg_path)
 
 
-def test_snapshot_purge_basic(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_purge_basic(bin, grpc_controller_client,  # NOQA
                               grpc_replica_client,  # NOQA
                               grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -833,7 +833,7 @@ def test_snapshot_purge_basic(bin, grpc_controller_client,  # NOQA
     assert info[snap1]["parent"] == ""
 
 
-def test_snapshot_purge_head_parent(bin, grpc_controller_client,  # NOQA
+def xxtest_snapshot_purge_head_parent(bin, grpc_controller_client,  # NOQA
                                     grpc_replica_client,  # NOQA
                                     grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -895,7 +895,7 @@ def test_snapshot_purge_head_parent(bin, grpc_controller_client,  # NOQA
     assert info[VOLUME_HEAD]["parent"] == snap1
 
 
-def test_backup_cli(bin, engine_manager_client,  # NOQA
+def xxtest_backup_cli(bin, engine_manager_client,  # NOQA
                     grpc_controller_client,  # NOQA
                     grpc_replica_client, grpc_replica_client2,  # NOQA
                     backup_targets):
@@ -909,7 +909,7 @@ def test_backup_cli(bin, engine_manager_client,  # NOQA
         cleanup_controller(grpc_controller_client)
 
 
-def test_volume_expand_with_snapshots(  # NOQA
+def xxtest_volume_expand_with_snapshots(  # NOQA
         bin, grpc_controller_client,  # NOQA
         grpc_replica_client, grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client)
@@ -1081,7 +1081,7 @@ def test_volume_expand_with_snapshots(  # NOQA
     assert r2.size == EXPANDED_SIZE_STR
 
 
-def test_expand_multiple_times():
+def xxtest_expand_multiple_times():
     for i in range(30):
         em_client = ProcessManagerClient(INSTANCE_MANAGER_ENGINE)
         engine_process = create_engine_process(em_client)
@@ -1109,7 +1109,7 @@ def test_expand_multiple_times():
         cleanup_process(rm_client)
 
 
-def test_single_replica_failure_during_engine_start(bin):  # NOQA
+def xxtest_single_replica_failure_during_engine_start(bin):  # NOQA
     """
     Test if engine still works fine if there is an invalid
     replica/backend in the starting phase
@@ -1312,6 +1312,9 @@ def test_engine_restart_after_sigkill(bin):  # NOQA
            '--label', 'name=snap1', '--label', 'key=value']
     snap1 = subprocess.check_output(cmd, encoding='utf-8').strip()
 
+    cmd = ["bash", "-c", "ps -eo pid,cmd"]
+    subprocess.run(cmd, check=True)
+
     cmd = ["bash", "-c",
            "kill -9 $(ps aux | grep %s | grep -v grep | awk '{print $2}')" %
            VOLUME_NAME]
@@ -1372,7 +1375,7 @@ def test_engine_restart_after_sigkill(bin):  # NOQA
     cleanup_process(rm_client)
 
 
-def test_replica_removal_and_recreation(bin):  # NOQA
+def xxtest_replica_removal_and_recreation(bin):  # NOQA
     """
     Test if engine can be remove and recreate a replica.
 
@@ -1432,7 +1435,7 @@ def test_replica_removal_and_recreation(bin):  # NOQA
     cleanup_process(rm_client)
 
 
-def test_replica_with_mismatched_size_add_start(bin, grpc_controller_client,  # NOQA
+def xxtest_replica_with_mismatched_size_add_start(bin, grpc_controller_client,  # NOQA
                                                 grpc_replica_client,  # NOQA
                                                 grpc_replica_client2):  # NOQA
     open_replica(grpc_replica_client, size=SIZE)

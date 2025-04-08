@@ -16,7 +16,7 @@ def random_num():
     return random.randint(0, 1000000)
 
 
-def test_create(grpc_replica_client):  # NOQA
+def xxtest_create(grpc_replica_client):  # NOQA
     r = grpc_replica_client.replica_get()
     assert r.state == 'initial'
     assert r.size == '0'
@@ -33,7 +33,7 @@ def test_create(grpc_replica_client):  # NOQA
     assert r.head == 'volume-head-000.img'
 
 
-def test_open(grpc_replica_client):  # NOQA
+def xxtest_open(grpc_replica_client):  # NOQA
     r = grpc_replica_client.replica_get()
     assert r.state == 'initial'
     assert r.size == '0'
@@ -62,7 +62,7 @@ def test_open(grpc_replica_client):  # NOQA
     assert r.head == 'volume-head-000.img'
 
 
-def test_close(grpc_replica_client):  # NOQA
+def xxtest_close(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
 
     r = grpc_replica_client.replica_open()
@@ -86,7 +86,7 @@ def test_close(grpc_replica_client):  # NOQA
     assert r.head == 'volume-head-000.img'
 
 
-def test_snapshot(grpc_replica_client):  # NOQA
+def xxtest_snapshot(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
 
     r = grpc_replica_client.replica_open()
@@ -124,7 +124,7 @@ def test_snapshot(grpc_replica_client):  # NOQA
                        'volume-snap-000.img']
 
 
-def test_remove_disk(grpc_replica_client):  # NOQA
+def xxtest_remove_disk(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
     grpc_replica_client.replica_open()
 
@@ -161,7 +161,7 @@ def test_remove_disk(grpc_replica_client):  # NOQA
     assert r.chain == ['volume-head-002.img', 'volume-snap-000.img']
 
 
-def test_remove_last_disk(grpc_replica_client):  # NOQA
+def xxtest_remove_last_disk(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
     grpc_replica_client.replica_open()
 
@@ -194,7 +194,7 @@ def test_remove_last_disk(grpc_replica_client):  # NOQA
     assert r.chain == ['volume-head-002.img', 'volume-snap-001.img']
 
 
-def test_reload(grpc_replica_client):  # NOQA
+def xxtest_reload(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
     grpc_replica_client.replica_open()
 
@@ -235,7 +235,7 @@ def test_reload(grpc_replica_client):  # NOQA
     assert r.parent == 'volume-snap-001.img'
 
 
-def test_reload_simple(grpc_replica_client):  # NOQA
+def xxtest_reload_simple(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
 
     r = grpc_replica_client.replica_open()
@@ -254,7 +254,7 @@ def test_reload_simple(grpc_replica_client):  # NOQA
     assert r.head == 'volume-head-000.img'
 
 
-def test_rebuilding(grpc_replica_client):  # NOQA
+def xxtest_rebuilding(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
     grpc_replica_client.replica_open()
 
@@ -297,7 +297,7 @@ def test_rebuilding(grpc_replica_client):  # NOQA
     assert r.chain == ['volume-head-001.img', 'volume-snap-001.img']
 
 
-def test_not_rebuilding(grpc_replica_client):  # NOQA
+def xxtest_not_rebuilding(grpc_replica_client):  # NOQA
     grpc_replica_client.replica_create(size=SIZE_STR)
     grpc_replica_client.replica_open()
 

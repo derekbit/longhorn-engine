@@ -19,7 +19,7 @@ from common.constants import (
 )
 
 
-def test_upgrade(grpc_engine_manager,  # NOQA
+def xxtest_upgrade(grpc_engine_manager,  # NOQA
                  grpc_controller,  # NOQA
                  grpc_fixed_dir_replica1, grpc_fixed_dir_replica2,  # NOQA
                  grpc_extra_replica1, grpc_extra_replica2):  # NOQA

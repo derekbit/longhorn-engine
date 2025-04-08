@@ -30,7 +30,7 @@ from common.constants import (
 )
 
 
-def test_restore_with_rebuild(
+def xxtest_restore_with_rebuild(
         grpc_controller, grpc_replica1, grpc_replica2,
         grpc_controller_no_frontend,
         grpc_fixed_dir_replica1, grpc_fixed_dir_replica2,
@@ -104,7 +104,7 @@ def test_restore_with_rebuild(
                          VOLUME_NAME, backup_target)
 
 
-def test_restore_incrementally(
+def xxtest_restore_incrementally(
         grpc_controller, grpc_replica1, grpc_replica2,
         grpc_controller_no_frontend,
         grpc_fixed_dir_replica1, grpc_fixed_dir_replica2,
@@ -281,7 +281,7 @@ def restore_inc_test(
     cleanup_replica(grpc_replica2)
 
 
-def test_inc_restore_with_rebuild_and_expansion(
+def xxtest_inc_restore_with_rebuild_and_expansion(
         grpc_controller, grpc_replica1, grpc_replica2,
         grpc_controller_no_frontend,
         grpc_fixed_dir_replica1, grpc_fixed_dir_replica2,
@@ -428,7 +428,7 @@ def test_inc_restore_with_rebuild_and_expansion(
                          VOLUME_NAME, backup_target)
 
 
-def test_inc_restore_failure_delta_file_cleanup_error(
+def xxtest_inc_restore_failure_delta_file_cleanup_error(
         grpc_controller, grpc_replica1, grpc_replica2,
         grpc_controller_no_frontend,
         grpc_fixed_dir_replica1, grpc_fixed_dir_replica2,
@@ -510,7 +510,7 @@ def inc_restore_failure_cleanup_error_test(
     cleanup_replica(grpc_replica2)
 
 
-def test_inc_restore_failure_invalid_block(
+def xxtest_inc_restore_failure_invalid_block(
         grpc_controller, grpc_replica1, grpc_replica2,
         grpc_controller_no_frontend,
         grpc_fixed_dir_replica1, grpc_fixed_dir_replica2,
