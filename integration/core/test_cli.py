@@ -1317,7 +1317,7 @@ def test_engine_restart_after_sigkill(bin):  # NOQA
     subprocess.run(cmd, check=True)
 
     cmd = ["bash", "-c",
-           "kill -9 $(ps aux | grep %s | grep -v grep | awk '{print $2}')" %
+           "kill -9 $(ps aux -www | grep %s | grep -v grep | awk '{print $2}')" %
            VOLUME_NAME]
     subprocess.check_call(cmd)
     wait_for_process_error(em_client, ENGINE_NAME)
