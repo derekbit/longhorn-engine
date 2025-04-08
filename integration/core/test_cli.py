@@ -1312,7 +1312,8 @@ def test_engine_restart_after_sigkill(bin):  # NOQA
            '--label', 'name=snap1', '--label', 'key=value']
     snap1 = subprocess.check_output(cmd, encoding='utf-8').strip()
 
-    cmd = ["bash", "-c", "ps -eo pid,cmd"]
+    cmd = ["bash", "-c",
+           "ps aux -www"]
     subprocess.run(cmd, check=True)
 
     cmd = ["bash", "-c",
