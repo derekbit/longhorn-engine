@@ -4,6 +4,8 @@ import (
 	"io"
 	"strings"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 type MultiWriterAt struct {
@@ -42,6 +44,7 @@ func (m *MultiWriterAt) WriteAt(p []byte, off int64) (int, error) {
 		go func(index int, w io.WriterAt) {
 			_, err := w.WriteAt(p, off)
 			if err != nil {
+				logrus.Infof("MultiWriterAt: WriteAt error %v", err)
 				errs[index] = err
 			}
 
@@ -65,5 +68,6 @@ func (m *MultiWriterAt) WriteAt(p []byte, off int64) (int, error) {
 		}
 	}
 
+	logrus.Infof("MultiWriterAt: WriteAt end error %+v", err)
 	return n, err
 }

@@ -138,6 +138,8 @@ func (c *Client) loop() {
 		"peerAddr": c.peerAddr,
 	})
 
+	log.Infof("Client loop started")
+
 	decremented := false
 	c.sharedTimeouts.Increment()
 	// Ensure we always decrement the sharedTimeouts counter regardless of how we leave this loop.
@@ -198,7 +200,7 @@ func (c *Client) loop() {
 
 			req, pending := c.messages[resp.Seq]
 			if !pending {
-				log.Warnf("Received response message id %v seq %v type %v for non pending request", resp.ID, resp.Seq, resp.Type)
+				log.Warnf("Received response message id %v seq %v type %v for non pending request from %v", resp.ID, resp.Seq, resp.Type, resp.From)
 				continue
 			}
 
@@ -238,13 +240,13 @@ func (c *Client) replyError(req *Message, err error) {
 func (c *Client) handleRequest(req *Message) {
 	switch req.Type {
 	case TypeRead:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpRead, int(req.Size))
+		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), req.Seq, journal.OpRead, int(req.Offset), int(req.Size))
 	case TypeWrite:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpWrite, int(req.Size))
+		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), req.Seq, journal.OpWrite, int(req.Offset), int(req.Size))
 	case TypeUnmap:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpUnmap, int(req.Size))
+		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), req.Seq, journal.OpUnmap, int(req.Offset), int(req.Size))
 	case TypePing:
-		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), journal.OpPing, 0)
+		req.ID = journal.InsertPendingOp(time.Now(), c.TargetID(), req.Seq, journal.OpPing, 0, 0)
 	}
 
 	req.MagicVersion = MagicVersion
@@ -266,6 +268,7 @@ func (c *Client) handleResponse(resp *Message) {
 		req.Type = resp.Type
 		req.Size = resp.Size
 		req.Data = resp.Data
+		req.From = c.peerAddr
 		req.Complete <- struct{}{}
 	}
 }

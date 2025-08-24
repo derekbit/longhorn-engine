@@ -524,13 +524,25 @@ func (c *Controller) ListReplicas() []types.Replica {
 }
 
 func (c *Controller) SetReplicaMode(address string, mode types.Mode) error {
+	log := logrus.WithFields(logrus.Fields{
+		"volume": c.VolumeName,
+	})
+
 	switch mode {
 	case types.ERR:
+		log.Infof("Waiting for the lock to set replica %v to mode %v", address, mode)
 		c.Lock()
-		defer c.Unlock()
+		defer func() {
+			c.Unlock()
+			log.Infof("Done setting replica %v to mode %v", address, mode)
+		}()
 	case types.RW:
+		log.Infof("Waiting for the reader lock to set replica %v to mode %v", address, mode)
 		c.RLock()
-		defer c.RUnlock()
+		defer func() {
+			c.RUnlock()
+			log.Infof("Done setting replica %v to mode %v", address, mode)
+		}()
 	default:
 		return fmt.Errorf("cannot set to mode %s", mode)
 	}
@@ -543,6 +555,7 @@ func (c *Controller) setReplicaModeNoLock(address string, mode types.Mode) {
 	log := logrus.WithField("volume", c.VolumeName)
 
 	for i, r := range c.replicas {
+		log.Infof("Checking replica %v, mode is %v", r.Address, r.Mode)
 		if r.Address == address {
 			if r.Mode != types.ERR {
 				log.Infof("Setting replica %v to mode %v", address, mode)
@@ -1067,6 +1080,7 @@ func (c *Controller) Start(volumeSize, volumeCurrentSize int64, addresses ...str
 
 func (c *Controller) WriteAt(b []byte, off int64) (int, error) {
 	c.RLock()
+	logrus.Infof("Debug --> lock WriteAt offset %d, len %d", off, len(b))
 	l := len(b)
 	if off < 0 || off+int64(l) > c.size {
 		err := fmt.Errorf("EOF: Write of %v bytes at offset %v is beyond volume size %v", l, off, c.size)
@@ -1081,6 +1095,7 @@ func (c *Controller) WriteAt(b []byte, off int64) (int, error) {
 	} else {
 		n, err = c.writeInNormalMode(b, off)
 	}
+	logrus.Infof("Debug --> lock WriteAt end offset %d, len %d, n %d, err %v", off, len(b), n, err)
 	c.RUnlock()
 	if err != nil {
 		return n, c.handleError(err)
@@ -1128,7 +1143,9 @@ func (c *Controller) writeInNormalMode(b []byte, off int64) (int, error) {
 }
 
 func (c *Controller) ReadAt(b []byte, off int64) (int, error) {
+
 	c.RLock()
+	logrus.Infof("Debug --> lock ReadAt")
 	l := len(b)
 	if off < 0 || off+int64(l) > c.size {
 		err := fmt.Errorf("EOF: Read of %v bytes at offset %v is beyond volume size %v", l, off, c.size)
@@ -1137,7 +1154,9 @@ func (c *Controller) ReadAt(b []byte, off int64) (int, error) {
 	}
 	startTime := time.Now()
 	n, err := c.backend.ReadAt(b, off)
+	logrus.Infof("Debug --> lock ReadAt end")
 	c.RUnlock()
+
 	if err != nil {
 		return n, c.handleError(err)
 	}
@@ -1236,8 +1255,13 @@ func (c *Controller) handleErrorNoLock(err error) error {
 }
 
 func (c *Controller) handleError(err error) error {
+	logrus.Infof("Debug --> waiting for lock handleError err=%v", err)
 	c.Lock()
-	defer c.Unlock()
+	logrus.Infof("Debug --> lock handleError err=%v", err)
+	defer func() {
+		logrus.Infof("Debug --> unlock handleError err=%v", err)
+		c.Unlock()
+	}()
 	return c.handleErrorNoLock(err)
 }
 

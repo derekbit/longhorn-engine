@@ -61,3 +61,11 @@ func (t *SharedTimeouts) CheckAndDecrement(duration time.Duration) time.Duration
 
 	return 0
 }
+
+func (t *SharedTimeouts) GetShortTimeout() time.Duration {
+	return t.shortTimeout
+}
+
+func (t *SharedTimeouts) GetLongTimeout() time.Duration {
+	return t.longTimeout
+}

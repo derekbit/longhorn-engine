@@ -119,6 +119,8 @@ type SharedTimeouts interface {
 	Increment()
 	Decrement()
 	CheckAndDecrement(duration time.Duration) time.Duration
+	GetShortTimeout() time.Duration
+	GetLongTimeout() time.Duration
 }
 
 type Controller interface {

@@ -81,13 +81,14 @@ RUN git clone https://github.com/longhorn/dep-versions.git -b ${SRC_BRANCH} /usr
     fi
 
 # Build liblonghorn
-RUN export REPO_OVERRIDE="" && \
-    export COMMIT_ID_OVERRIDE="" && \
+RUN export REPO_OVERRIDE="https://github.com/derekbit/liblonghorn.git" && \
+    export COMMIT_ID_OVERRIDE="51215cfbba653e1f40165ad72893c8ffc524856d" && \
     bash /usr/src/dep-versions/scripts/build-liblonghorn.sh "${REPO_OVERRIDE}" "${COMMIT_ID_OVERRIDE}"
 
+
 # Build TGT
-RUN export REPO_OVERRIDE="" && \
-    export COMMIT_ID_OVERRIDE="" && \
+RUN export REPO_OVERRIDE="https://github.com/derekbit/tgt.git" && \
+    export COMMIT_ID_OVERRIDE="adcf8ff9b7b46920813079f0884f38984a7482bd" && \
     bash /usr/src/dep-versions/scripts/build-tgt.sh "${REPO_OVERRIDE}" "${COMMIT_ID_OVERRIDE}"
 
 # Build cache for tox
